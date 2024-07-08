@@ -28,6 +28,22 @@ def log_pl(exchange, ticker):
     TurtleTrader(exchange).log_total_pl()
 
 
+@cli.command(help='close position manually')
+@click.option('-t', '--ticker', type=str, default='BTC')
+def close_position(ticker):
+    _logger.info(f"\n============== CLOSING POSITION {ticker} ==============\n")
+    try:
+        exchange = ExchangeAdapter('binance')
+        exchange.load_exchange()
+        exchange.market = f"{ticker}"
+        trader = TurtleTrader(exchange)
+        trader.close_position()
+    except Exception as e:
+        _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        sys.exit(1)
+
+
 @cli.command(help='run Turtle trading bot')
 def trade():
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")

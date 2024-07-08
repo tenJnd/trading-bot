@@ -467,3 +467,7 @@ class TurtleTrader:
         # work with opened position
         else:
             self.process_opened_position()
+
+    def close_position(self):
+        if self.opened_positions:
+            self.exit_position()
