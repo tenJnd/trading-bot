@@ -469,5 +469,5 @@ class TurtleTrader:
             self.process_opened_position()
 
     def close_position(self):
-        if self.opened_positions:
+        if self.opened_positions is not None:
             self.exit_position()
