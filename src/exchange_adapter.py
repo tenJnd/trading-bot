@@ -30,7 +30,7 @@ def retry_if_network_error(exception):
 class ExchangeAdapter(ExchangeFactory):
     params = {'leverage': LEVERAGE}
 
-    def __init__(self, exchange_id, market: str = None, collateral: str = 'USDT'):
+    def __init__(self, exchange_id, market: str = None, collateral: str = 'USDC'):
         super().__init__(exchange_id)
         self._collateral = collateral
         self._market = f"{market}/{collateral}"
