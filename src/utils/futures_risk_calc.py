@@ -29,7 +29,7 @@ def calculate_stop_loss_based_on_risk(position, capital, risk_percent, asset_pri
     return stop_loss_price
 
 
-def calculate_risk_based_on_stop_loss(position, capital, asset_price, move, risk_percent=0.01, leverage=1):
+def calculate_position_size_based_on_move_against(position, capital, asset_price, move, risk_percent=0.01, leverage=1):
     leveraged_risk = leverage * risk_percent
 
     risk_amount = leveraged_risk * capital
@@ -60,17 +60,60 @@ def calculate_risk_based_on_stop_loss(position, capital, asset_price, move, risk
     return asset_amount
 
 
-if __name__ == '__main__':
-    calculate_stop_loss_based_on_risk(position='long',
-                                      capital=300,
-                                      risk_percent=0.05,
-                                      asset_price=66_000,
-                                      leverage=5)
+def calculate_risk_percent_based_on_stop_loss(position, capital, asset_price, stop_loss_price, leverage=1):
+    leveraged_capital = capital * leverage
+    asset_amount = leveraged_capital / asset_price
 
-    calculate_risk_based_on_stop_loss(position='long',
-                                      capital=100,
-                                      asset_price=66_600,
-                                      move=6600,
-                                      risk_percent=0.01,
-                                      leverage=5  # percent of capital risk
-                                      )
+    if position == 'long':
+        price_move = asset_price - stop_loss_price
+    else:
+        price_move = stop_loss_price - asset_price
+
+    loss = asset_amount * price_move
+    risk_amount = leveraged_capital - (leveraged_capital - loss)
+    risk_percent = risk_amount / capital
+
+    print(f"============\n"
+          f"Calculate the risk percentage based on stop-loss price\n"
+          f"position {str.upper(position)} set up:\n"
+          f"capital: {capital}\n"
+          f"leverage: {leverage}\n"
+          f"asset price: {asset_price}\n"
+          f"stop-loss price: {stop_loss_price}\n"
+          f"risk amount: {risk_amount}\n"
+          f"percent risk of capital: {round(risk_percent * 100, 1)}%")
+
+    return risk_percent
+
+
+if __name__ == '__main__':
+    position = 'short'
+    asset_price = 56400
+    capital = 980
+    leverage = 2
+    risk_percent = 0.02
+
+    # function specific
+    move = 5000
+    stop_loss = 57000
+
+    calculate_stop_loss_based_on_risk(position=position,
+                                      capital=capital,
+                                      risk_percent=risk_percent,
+                                      asset_price=asset_price,
+                                      leverage=leverage)
+
+    calculate_position_size_based_on_move_against(position=position,
+                                                  capital=capital,
+                                                  asset_price=asset_price,
+                                                  move=move,
+                                                  risk_percent=risk_percent,
+                                                  leverage=leverage  # percent of capital risk
+                                                  )
+
+    calculate_risk_percent_based_on_stop_loss(position=position,
+                                              capital=capital,
+                                              asset_price=asset_price,
+                                              stop_loss_price=stop_loss,
+                                              leverage=leverage)
+
