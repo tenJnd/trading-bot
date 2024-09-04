@@ -20,7 +20,8 @@ from config import (TRADE_RISK_ALLOCATION,
                     OHLC_HISTORY_W_BUFFER_DAYS,
                     PYRAMIDING_LIMIT,
                     AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT,
-                    SLACK_URL)
+                    SLACK_URL,
+                    TIMEFRAME)
 from exchange_adapter import ExchangeAdapter
 from src.model import trader_database
 from src.model.turtle_model import Order
@@ -278,7 +279,7 @@ class TurtleTrader:
         if testing_file_path:
             ohlc = pd.read_csv(testing_file_path)
         else:
-            ohlc = self._exchange.fetch_ohlc(since=since_timestamp_ms)
+            ohlc = self._exchange.fetch_ohlc(since=since_timestamp_ms, timeframe=TIMEFRAME)
 
         ohlc = calculate_atr(ohlc, period=ATR_PERIOD)
         ohlc = turtle_trading_signals_adjusted(ohlc)

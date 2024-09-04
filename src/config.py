@@ -61,13 +61,22 @@ STOP_LOSS_ATR_MULTIPL = float(os.environ.get('STOP_LOSS_ATR_MULTIPL', 2))  # mul
 
 # timeframes
 ATR_PERIOD = int(os.environ.get('ATR_PERIOD', 20))  # 20 for slow, 50 for fast
-TURTLE_ENTRY_DAYS = int(os.environ.get('TURTLE_ENTRY_DAYS', 20))  # 20 for fast, 50 for slow
+TURTLE_ENTRY_DAYS = int(os.environ.get('TURTLE_ENTRY_DAYS', ATR_PERIOD))  # 20 for fast, 50 for slow
 TURTLE_EXIT_DAYS = int(os.environ.get('TURTLE_EXIT_DAYS', 10))  # 10 for fast, 20 for slow
+
+TIMEFRAME = os.environ.get('TIMEFRAME', '4h')
+
 # fetch ohlc history with buffer
+TIMEFRAME_BUFFER = {
+    '1d': 10 + TURTLE_ENTRY_DAYS,
+    '4h': 8
+}
 OHLC_HISTORY_W_BUFFER_DAYS = int(os.environ.get(
     'OHLC_HISTORY_W_BUFFER_DAYS',
-    10 + TURTLE_ENTRY_DAYS
+    TIMEFRAME_BUFFER.get(TIMEFRAME)
 ))
+
+
 
 # pyramiding
 PYRAMIDING_LIMIT = int(os.environ.get('PYRAMIDING_LIMIT', 4))  # max pyramid trades (1 init, 3 pyramid)
