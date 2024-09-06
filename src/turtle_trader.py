@@ -207,7 +207,8 @@ class TurtleTrader:
                     Order.pl
                 ).filter(
                     Order.position_status == 'opened',
-                    Order.symbol == self._exchange.market_futures
+                    Order.symbol == self._exchange.market_futures,
+                    Order.exchange == self._exchange.exchange_id
                 ).order_by(
                     Order.timestamp
                 ).statement,
@@ -343,7 +344,7 @@ class TurtleTrader:
             session.add(order_object)
         _logger.info('Order successfully saved')
 
-    def save_order(self, order, action, position_status='opened'):
+    def save_order(self, order: OrderSchema, action, position_status='opened'):
         _logger.info('Saving order to file and DB')
         try:
             save_json_to_file(order, f"order_{order['id']}")
@@ -362,6 +363,8 @@ class TurtleTrader:
         order_object.agg_trade_id = self.create_agg_trade_id()
         atr2 = STOP_LOSS_ATR_MULTIPL * order_object.atr
         order_object.stop_loss_price = self.get_stop_loss_price(action, atr2)
+
+        order_object.exchange = self._exchange.exchange_id
 
         if action == 'close':
             order_object.closed_positions = self.opened_positions_ids
