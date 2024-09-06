@@ -20,7 +20,7 @@ def cli():
 
 
 @cli.command()
-@click.option('-e', '--exchange', type=str, default='binance')
+@click.option('-exch', '--exchange', type=str, default='binance')
 @click.option('-t', '--ticker', type=str, default='BTC')
 def log_pl(exchange, ticker):
     exchange = ExchangeAdapter(exchange)
@@ -29,11 +29,12 @@ def log_pl(exchange, ticker):
 
 
 @cli.command(help='close position manually')
+@click.option('-exch', '--exchange', type=str, default='binance')
 @click.option('-t', '--ticker', type=str, default='BTC')
-def close_position(ticker):
+def close_position(exchange, ticker):
     _logger.info(f"\n============== CLOSING POSITION {ticker} ==============\n")
     try:
-        exchange = ExchangeAdapter('binance')
+        exchange = ExchangeAdapter(exchange)
         exchange.load_exchange()
         exchange.market = f"{ticker}"
         trader = TurtleTrader(exchange)
