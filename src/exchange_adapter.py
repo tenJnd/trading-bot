@@ -30,11 +30,11 @@ def retry_if_network_error(exception):
 class ExchangeAdapter(ExchangeFactory):
     params = {'leverage': LEVERAGE}
 
-    def __init__(self, exchange_id, market: str = None, collateral: str = 'USDC'):
+    def __init__(self, exchange_id, market: str = None):
         super().__init__(exchange_id)
-        self._collateral = collateral
-        self._market = f"{market}/{collateral}"
-        self.market_futures = f"{self._market}:{self._collateral}"
+        self._base_currency = self._exchange.base_currency
+        self._market = f"{market}/{self._base_currency}"
+        self.market_futures = f"{self._market}:{self._base_currency}"
         self._open_position = None
         self.balance = None
 
@@ -67,7 +67,7 @@ class ExchangeAdapter(ExchangeFactory):
         if not self.balance:
             self.fetch_balance()
         if self.balance:
-            free = self.balance['free'][self._collateral]
+            free = self.balance['free'][self._base_currency]
             return free
         return 0
 
@@ -76,7 +76,7 @@ class ExchangeAdapter(ExchangeFactory):
         if not self.balance:
             self.fetch_balance()
         if self.balance:
-            total = self.balance['total'][self._collateral]
+            total = self.balance['total'][self._base_currency]
             return total
         return 0
 
@@ -87,8 +87,8 @@ class ExchangeAdapter(ExchangeFactory):
     @market.setter
     def market(self, name) -> None:
         _logger.info(f"Setting market to {name}")
-        self._market = f"{name}/{self._collateral}"
-        self.market_futures = f"{self._market}:{self._collateral}"
+        self._market = f"{name}/{self._base_currency}"
+        self.market_futures = f"{self._market}:{self._base_currency}"
 
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,

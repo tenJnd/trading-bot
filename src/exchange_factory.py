@@ -32,10 +32,14 @@ class ExchangeFactory:
     def exchange_traded_tickers(self):
         return app_config.EXCHANGES[self._exchange_id]['traded_tickers']
 
+    @property
+    def base_currency(self):
+        return app_config.EXCHANGES[self._exchange_id]['base_currency']
+
     @retry(retry_on_exception=retry_if_network_error, stop_max_attempt_number=7, wait_fixed=10_000)
     def _create_exchange_object(self) -> ccxt.Exchange:
         try:
-            _logger.info(f"crating exchange object")
+            _logger.info(f"crating exchange object, exchange id: {self._exchange_id}")
             _exchange_class = getattr(ccxt, self._exchange_id)
             _exchange = _exchange_class(app_config.EXCHANGES[self._exchange_id])
 
