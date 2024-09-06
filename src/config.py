@@ -69,7 +69,7 @@ MEXC_CONFIG_PROD = {
     },
     'traded_tickers': TRADED_TICKERS_MEXC,
     'base_currency': 'USDT',
-    'timeout': 3_000
+    'timeout': 30_000
 }
 
 SLACK_URL = os.environ.get("SLACK_URL")

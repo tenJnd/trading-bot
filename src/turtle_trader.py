@@ -22,7 +22,7 @@ from config import (TRADE_RISK_ALLOCATION,
                     AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT,
                     SLACK_URL,
                     TIMEFRAME)
-from exchange_adapter import ExchangeAdapter
+from exchange_adapter import BaseExchangeAdapter
 from src.model import trader_database
 from src.model.turtle_model import Order
 from src.schemas.turtle_schema import OrderSchema
@@ -164,7 +164,7 @@ def turtle_trading_signals_adjusted(df):
 class TurtleTrader:
 
     def __init__(self,
-                 exchange: ExchangeAdapter,
+                 exchange: BaseExchangeAdapter,
                  db: PostgresqlAdapter = None,
                  testing_file_path: bool = False
                  ):

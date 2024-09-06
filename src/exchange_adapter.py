@@ -6,8 +6,7 @@ import pandas as pd
 from retrying import retry
 from slack_bot.notifications import SlackNotifier
 
-from config import SLACK_URL, LEVERAGE
-from exchange_factory import ExchangeFactory
+from config import SLACK_URL, LEVERAGE, app_config
 
 _notifier = SlackNotifier(url=SLACK_URL, username='Exchange adapter')
 _logger = logging.getLogger(__name__)
@@ -27,14 +26,20 @@ def retry_if_network_error(exception):
     return isinstance(exception, (ccxt.NetworkError, ccxt.ExchangeError))
 
 
-class ExchangeAdapter(ExchangeFactory):
+class BaseExchangeAdapter:
     params = {'leverage': LEVERAGE}
 
-    def __init__(self, exchange_id, market: str = None):
-        super().__init__(exchange_id)
+    def __init__(self, exchange_id: str, market: str = None):
+        self.exchange_id = exchange_id
+        exchange_class = getattr(ccxt, self.exchange_id)
+        self._exchange_config = app_config.EXCHANGES[exchange_id]
+        self._exchange = exchange_class(self._exchange_config)
+
         self._base_currency = self._exchange.base_currency
         self._market = f"{market}/{self._base_currency}"
         self.market_futures = f"{self._market}:{self._base_currency}"
+
+        self.markets = None
         self._open_position = None
         self.balance = None
 
@@ -43,6 +48,10 @@ class ExchangeAdapter(ExchangeFactory):
             _logger.info(f"Loading markets on {self._exchange.id}")
             self.markets = self._exchange.load_markets(True)
         _logger.info("Markets loaded successfully")
+
+    @property
+    def exchange_traded_tickers(self):
+        return self._exchange_config['traded_tickers']
 
     @property
     def market_info(self):
@@ -106,7 +115,7 @@ class ExchangeAdapter(ExchangeFactory):
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def fetch_balance(self, min_balance=50):
+    def fetch_balance(self):
         _logger.info(f"getting balance")
         self.balance = self._exchange.fetch_balance()
 
@@ -127,7 +136,7 @@ class ExchangeAdapter(ExchangeFactory):
     def opened_position(self):
         _logger.info(f"getting open positions")
 
-        if self._exchange_id == 'binance':
+        if self.exchange_id == 'binance':
             open_positions = self._exchange.fetch_account_positions(
                 symbols=[self.market_futures]
             )
@@ -169,9 +178,6 @@ class ExchangeAdapter(ExchangeFactory):
         _logger.info(f"entering {str.upper(side)} position")
         leverage = self.params.get('leverage', 1)
 
-        # Determine positionType and openType (for MEXC)
-        position_type = 1 if side == 'buy' else 2  # 1 for long (buy), 2 for short (sell)
-        open_type = 2  # Assuming cross margin, change to 1 for isolated margin
         _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
 
         try:
@@ -182,17 +188,7 @@ class ExchangeAdapter(ExchangeFactory):
             #     _logger.info(f"There is already one open position")
             #     self.close_position()
 
-            if self._exchange.id == 'mexc':
-                _logger.info(f"Setting leverage for MEXC: leverage={leverage}, "
-                             f"openType={open_type}, positionType={position_type}")
-                self._exchange.set_leverage(
-                    leverage,
-                    self.market_futures,
-                    {'openType': open_type, 'positionType': position_type}
-                )
-            else:
-                self._exchange.set_leverage(leverage, self.market_futures)
-
+            self._exchange.set_leverage(leverage, self.market_futures)
             _logger.info(f"creating order: {side}, "
                          f"amount: {amount}, "
                          f"params: {self.params}")
@@ -280,3 +276,38 @@ class ExchangeAdapter(ExchangeFactory):
         if side:
             return position_order(side, amount)
         return position_order()
+
+
+class MexcExchange(BaseExchangeAdapter):
+    def enter_position(self, side, amount):
+        leverage = self.params.get('leverage', 1)
+        position_type = 1 if side == 'buy' else 2
+        open_type = 1  # Isolated margin
+
+        _logger.info(f"Setting leverage for MEXC: leverage={leverage}, "
+                     f"openType={open_type}, positionType={position_type}")
+        self._exchange.set_leverage(
+            leverage,
+            self.market_futures,
+            {'openType': open_type, 'positionType': position_type}
+        )
+
+        params = {
+            'vol': amount,
+            'leverage': leverage,
+            'side': position_type,
+            'type': 5,
+            'openType': open_type,
+            'positionMode': 1
+        }
+
+        order = self._exchange.create_order(
+            symbol=self.market_futures,
+            type='market',
+            side=side,
+            amount=amount,
+            params=params
+        )
+
+        _logger.info(f"Order created on MEXC: {order}")
+        return order

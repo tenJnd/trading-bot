@@ -7,7 +7,8 @@ from jnd_utils.log import init_logging
 from slack_bot.notifications import SlackNotifier
 
 from config import SLACK_URL
-from exchange_adapter import ExchangeAdapter
+from exchange_adapter import BaseExchangeAdapter
+from src.exchange_factory import ExchangeFactory
 from turtle_trader import TurtleTrader
 
 _logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ def cli():
 @click.option('-exch', '--exchange', type=str, default='binance')
 @click.option('-t', '--ticker', type=str, default='BTC')
 def log_pl(exchange, ticker):
-    exchange = ExchangeAdapter(exchange)
+    exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
     exchange.market = f"{ticker}"
     TurtleTrader(exchange).log_total_pl()
 
@@ -34,7 +35,7 @@ def log_pl(exchange, ticker):
 def close_position(exchange, ticker):
     _logger.info(f"\n============== CLOSING POSITION {ticker} ==============\n")
     try:
-        exchange = ExchangeAdapter(exchange)
+        exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
         exchange.load_exchange()
         exchange.market = f"{ticker}"
         trader = TurtleTrader(exchange)
@@ -50,15 +51,19 @@ def close_position(exchange, ticker):
 def trade(exchange):
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")
     try:
-        exchange = ExchangeAdapter(exchange)
-        _logger.info(f"Initialising Turtle trader, tickers: {exchange.exchange_traded_tickers}")
-        exchange.load_exchange()
-        for ticker in exchange.exchange_traded_tickers:
+        # Using the factory to get the correct exchange adapter
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
+
+        _logger.info(f"Initialising Turtle trader, tickers: {exchange_adapter.exchange_traded_tickers}")
+        exchange_adapter.load_exchange()
+
+        for ticker in exchange_adapter.exchange_traded_tickers:
             _logger.info(f"\n\n----------- Starting trade - {ticker} -----------")
-            exchange.market = f"{ticker}"
-            trader = TurtleTrader(exchange)
-            _logger.debug(f"Market info before trading: {exchange.market_info}")
+            exchange_adapter.market = f"{ticker}"
+            trader = TurtleTrader(exchange_adapter)
+            _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
             trader.trade()
+
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
         _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}")
