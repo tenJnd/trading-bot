@@ -24,6 +24,14 @@ class ExchangeFactory:
         self._exchange = self._create_exchange_object()
         self.markets = ...
 
+    @property
+    def exchange_id(self):
+        return self._exchange_id
+
+    @property
+    def exchange_traded_tickers(self):
+        return app_config.EXCHANGES[self._exchange_id]['traded_tickers']
+
     @retry(retry_on_exception=retry_if_network_error, stop_max_attempt_number=7, wait_fixed=10_000)
     def _create_exchange_object(self) -> ccxt.Exchange:
         try:

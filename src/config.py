@@ -18,6 +18,10 @@ MEXC_API_SECRET = os.environ.get('MEXC_API_SECRET')
 
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
+TRADED_TICKERS_BINANCE = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
+TRADED_TICKERS_MEXC = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
+TRADED_TICKERS_KUCOIN = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
+
 # exchanges
 BINANCE_CONFIG_TEST = {
     'apiKey': BINANCE_API_KEY_TEST,
@@ -26,7 +30,8 @@ BINANCE_CONFIG_TEST = {
     'options': {
         'defaultType': 'future',
         'leverage': LEVERAGE
-    }
+    },
+    'traded_tickers': TRADED_TICKERS_BINANCE
 }
 
 BINANCE_CONFIG_PROD = {
@@ -36,7 +41,8 @@ BINANCE_CONFIG_PROD = {
     'options': {
         'defaultType': 'future',
         'leverage': LEVERAGE
-    }
+    },
+    'traded_tickers': TRADED_TICKERS_BINANCE
 }
 
 KUCOIN_CONFIG_PROD = {
@@ -46,7 +52,8 @@ KUCOIN_CONFIG_PROD = {
     'enableRateLimit': True,
     'options': {
         'leverage': LEVERAGE
-    }
+    },
+    'traded_tickers': TRADED_TICKERS_KUCOIN
 }
 
 MEXC_CONFIG_PROD = {
@@ -55,12 +62,12 @@ MEXC_CONFIG_PROD = {
     'enableRateLimit': True,
     'options': {
         'leverage': LEVERAGE
-    }
+    },
+    'traded_tickers': TRADED_TICKERS_MEXC
 }
 
 SLACK_URL = os.environ.get("SLACK_URL")
 APP_SETTINGS = os.environ.get("APP_SETTINGS", "DevConfig")
-TRADED_TICKERS = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
 
 # turtle strategy
 # risks
@@ -69,7 +76,8 @@ MAX_ONE_ASSET_RISK_ALLOCATION = float(os.environ.get(
     'MAX_ONE_ASSET_RISK_ALLOCATION',
     0.5
 ))  # maximum of capital in one asset traded
-STOP_LOSS_ATR_MULTIPL = float(os.environ.get('STOP_LOSS_ATR_MULTIPL', 2))  # multiplication of atr to determine stop-loss
+STOP_LOSS_ATR_MULTIPL = float(
+    os.environ.get('STOP_LOSS_ATR_MULTIPL', 2))  # multiplication of atr to determine stop-loss
 
 # timeframes
 ATR_PERIOD = int(os.environ.get('ATR_PERIOD', 20))  # 20 for slow, 50 for fast
@@ -87,8 +95,6 @@ OHLC_HISTORY_W_BUFFER_DAYS = int(os.environ.get(
     'OHLC_HISTORY_W_BUFFER_DAYS',
     TIMEFRAME_BUFFER.get(TIMEFRAME)
 ))
-
-
 
 # pyramiding
 PYRAMIDING_LIMIT = int(os.environ.get('PYRAMIDING_LIMIT', 4))  # max pyramid trades (1 init, 3 pyramid)
