@@ -167,6 +167,12 @@ class ExchangeAdapter(ExchangeFactory):
            wait_exponential_multiplier=1500)
     def enter_position(self, side, amount):
         _logger.info(f"entering {str.upper(side)} position")
+        leverage = self.params.get('leverage', 1)
+
+        # Determine positionType and openType (for MEXC)
+        position_type = 1 if side == 'buy' else 2  # 1 for long (buy), 2 for short (sell)
+        open_type = 2  # Assuming cross margin, change to 1 for isolated margin
+        _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
 
         try:
             # self.opened_position()
@@ -175,6 +181,17 @@ class ExchangeAdapter(ExchangeFactory):
             # if self.open_position_side:
             #     _logger.info(f"There is already one open position")
             #     self.close_position()
+
+            if self._exchange.id == 'mexc':
+                _logger.info(f"Setting leverage for MEXC: leverage={leverage}, "
+                             f"openType={open_type}, positionType={position_type}")
+                self._exchange.set_leverage(
+                    leverage,
+                    self.market_futures,
+                    {'openType': open_type, 'positionType': position_type}
+                )
+            else:
+                self._exchange.set_leverage(leverage, self.market_futures)
 
             _logger.info(f"creating order: {side}, "
                          f"amount: {amount}, "
