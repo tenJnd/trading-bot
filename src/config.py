@@ -19,8 +19,8 @@ MEXC_API_SECRET = os.environ.get('MEXC_API_SECRET')
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
 TRADED_TICKERS_BINANCE = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
-TRADED_TICKERS_MEXC = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
-TRADED_TICKERS_KUCOIN = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
+TRADED_TICKERS_MEXC = os.environ.get("TRADED_TICKERS_MEXC", "BTC,ETH,SOL,DOGE").split(',')
+TRADED_TICKERS_KUCOIN = os.environ.get("TRADED_TICKERS_KUCOIN", "BTC,ETH,SOL,DOGE").split(',')
 
 # exchanges
 BINANCE_CONFIG_TEST = {
@@ -31,7 +31,8 @@ BINANCE_CONFIG_TEST = {
         'defaultType': 'future',
         'leverage': LEVERAGE
     },
-    'traded_tickers': TRADED_TICKERS_BINANCE
+    'traded_tickers': TRADED_TICKERS_BINANCE,
+    'base_currency': 'USDC'
 }
 
 BINANCE_CONFIG_PROD = {
@@ -42,7 +43,8 @@ BINANCE_CONFIG_PROD = {
         'defaultType': 'future',
         'leverage': LEVERAGE
     },
-    'traded_tickers': TRADED_TICKERS_BINANCE
+    'traded_tickers': TRADED_TICKERS_BINANCE,
+    'base_currency': 'USDC'
 }
 
 KUCOIN_CONFIG_PROD = {
@@ -53,7 +55,8 @@ KUCOIN_CONFIG_PROD = {
     'options': {
         'leverage': LEVERAGE
     },
-    'traded_tickers': TRADED_TICKERS_KUCOIN
+    'traded_tickers': TRADED_TICKERS_KUCOIN,
+    'base_currency': 'USDT'
 }
 
 MEXC_CONFIG_PROD = {
@@ -63,7 +66,8 @@ MEXC_CONFIG_PROD = {
     'options': {
         'leverage': LEVERAGE
     },
-    'traded_tickers': TRADED_TICKERS_MEXC
+    'traded_tickers': TRADED_TICKERS_MEXC,
+    'base_currency': 'USDT'
 }
 
 SLACK_URL = os.environ.get("SLACK_URL")

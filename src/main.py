@@ -6,7 +6,7 @@ import click
 from jnd_utils.log import init_logging
 from slack_bot.notifications import SlackNotifier
 
-from config import SLACK_URL, TRADED_TICKERS
+from config import SLACK_URL
 from exchange_adapter import ExchangeAdapter
 from turtle_trader import TurtleTrader
 
@@ -45,11 +45,12 @@ def close_position(ticker):
 
 
 @cli.command(help='run Turtle trading bot')
-def trade():
+@click.option('-exch', '--exchange', type=str, default='binance')
+def trade(exchange):
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")
     try:
-        _logger.info(f"Initialising Turtle trader, tickers: {TRADED_TICKERS}")
-        exchange = ExchangeAdapter('binance')
+        exchange = ExchangeAdapter(exchange)
+        _logger.info(f"Initialising Turtle trader, tickers: {exchange.exchange_traded_tickers}")
         exchange.load_exchange()
         for ticker in exchange.exchange_traded_tickers:
             _logger.info(f"\n\n----------- Starting trade - {ticker} -----------")
