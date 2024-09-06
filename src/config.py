@@ -18,7 +18,7 @@ MEXC_API_SECRET = os.environ.get('MEXC_API_SECRET')
 
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
-TRADED_TICKERS_BINANCE = os.environ.get("TRADED_TICKERS", "BTC,ETH,SOL,DOGE").split(',')
+TRADED_TICKERS_BINANCE = os.environ.get("TRADED_TICKERS_BINANCE", "BTC,ETH,SOL,DOGE").split(',')
 TRADED_TICKERS_MEXC = os.environ.get("TRADED_TICKERS_MEXC", "BTC,ETH,SOL,DOGE").split(',')
 TRADED_TICKERS_KUCOIN = os.environ.get("TRADED_TICKERS_KUCOIN", "BTC,ETH,SOL,DOGE").split(',')
 
