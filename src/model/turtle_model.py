@@ -1,4 +1,3 @@
-from database_tools.adapters.postgresql import PostgresqlAdapter
 from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -46,17 +45,17 @@ class Order(TurtleBase):
     stop_loss_price = Column(Float, nullable=True)
     info = Column(JSON, nullable=True)
 
-    agg_trade_id = Column(String, nullable=True)
+    exchange = Column(String, nullable=False)
+    agg_trade_id = Column(String, nullable=False)
 
-    atr = Column(Numeric, nullable=True)
-    position_status = Column(String, nullable=True, default='opened')
-    action = Column(String, nullable=True)
+    atr = Column(Numeric, nullable=False)
+    position_status = Column(String, nullable=False, default='opened')
+    action = Column(String, nullable=False)
     closed_positions = Column(ARRAY(String), nullable=True)
     free_balance = Column(Float, nullable=True)
     total_balance = Column(Float, nullable=True)
     pl = Column(Float, nullable=True)
     pl_percent = Column(Float, nullable=True)
-
 
 
 if __name__ == '__main__':
