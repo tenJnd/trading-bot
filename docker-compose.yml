@@ -1,6 +1,7 @@
 version: "3"
 services:
-  trading-bot:
+  trading-bot-binance:
+    container_name: trading-bot-binance
     image: tenjnd/trading-bot:latest
     env_file:
       - .env
@@ -9,6 +10,17 @@ services:
       - trading-data-volume:/app/trading_data
     entrypoint: ["python"]
     command: ["src/main.py", "trade"]
+
+#  trading-bot-mexc:
+#    container_name: trading-bot-mexc
+#    image: tenjnd/trading-bot:latest
+#    env_file:
+#      - .env
+#    network_mode: "host"
+#    volumes:
+#      - trading-data-volume:/app/trading_data
+#    entrypoint: ["python"]
+#    command: ["src/main.py", "trade", "-exch", "mexc"]
 
 volumes:
   trading-data-volume:

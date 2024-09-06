@@ -18,9 +18,9 @@ def retry_if_network_error(exception):
 
 class ExchangeFactory:
 
-    def __init__(self, exchange_id: str, use_futures: bool = False):
+    def __init__(self, exchange_id: str):
         self._exchange_id = exchange_id
-        self._use_futures = use_futures
+        self._exchange_config = app_config.EXCHANGES[self._exchange_id]
         self._exchange = self._create_exchange_object()
         self.markets = ...
 
@@ -30,7 +30,7 @@ class ExchangeFactory:
 
     @property
     def exchange_traded_tickers(self):
-        return app_config.EXCHANGES[self._exchange_id]['traded_tickers']
+        return self._exchange_config['traded_tickers']
 
     @property
     def base_currency(self):
@@ -41,13 +41,14 @@ class ExchangeFactory:
         try:
             _logger.info(f"crating exchange object, exchange id: {self._exchange_id}")
             _exchange_class = getattr(ccxt, self._exchange_id)
-            _exchange = _exchange_class(app_config.EXCHANGES[self._exchange_id])
+            _exchange = _exchange_class(self._exchange_config)
 
-            if self._use_futures:
-                # Set exchange to use futures
-                # (on binance perp swaps are not the 'future'
-                _exchange.options['defaultType'] = 'future'
-                _logger.info("Configured for futures trading")
+            # market_type = self._exchange_config.get('defaultType', None)
+            # if market_type:
+            #     # Set exchange to use futures
+            #     # (on binance perp swaps are not the 'future'
+            #     _exchange.options['defaultType'] = market_type
+            #     _logger.info("Configured for futures trading")
 
             if app_config.USE_SANDBOX:
                 _logger.info(f"using SANDBOX")

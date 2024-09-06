@@ -56,18 +56,21 @@ class ExchangeAdapter(ExchangeFactory):
 
     @property
     def min_amount(self):
-        return self.market_info['limits']['amount']['min']
+        min_amount = self.market_info['limits']['amount']['min']
+        return min_amount if min_amount else 0
 
     @property
     def min_cost(self):
-        return self.market_info['limits']['cost']['min']
+        min_cost = self.market_info['limits']['cost']['min']
+        return min_cost if min_cost else 0
 
     @property
     def free_balance(self):
         if not self.balance:
             self.fetch_balance()
         if self.balance:
-            free = self.balance['free'][self._base_currency]
+            binance_bnfcr = self.balance['free'].get('BNFCR', 0)
+            free = self.balance['free'][self._base_currency] + binance_bnfcr
             return free
         return 0
 
@@ -76,7 +79,8 @@ class ExchangeAdapter(ExchangeFactory):
         if not self.balance:
             self.fetch_balance()
         if self.balance:
-            total = self.balance['total'][self._base_currency]
+            binance_bnfcr = self.balance['total'].get('BNFCR', 0)
+            total = self.balance['total'][self._base_currency] + binance_bnfcr
             return total
         return 0
 
@@ -189,7 +193,7 @@ class ExchangeAdapter(ExchangeFactory):
         except (ccxt.NetworkError, ccxt.ExchangeError) as e:
             msg = (f"{self._exchange.id} enter_position failed "
                    f"due to a Network or Exchange error: {e}")
-            _logger.error(msg)
+            _logger.error(f"{msg}\n{traceback.format_exc()}")
             raise
 
         except AssertionError as e:

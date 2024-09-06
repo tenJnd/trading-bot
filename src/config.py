@@ -32,7 +32,7 @@ BINANCE_CONFIG_TEST = {
         'leverage': LEVERAGE
     },
     'traded_tickers': TRADED_TICKERS_BINANCE,
-    'base_currency': 'USDC'
+    'base_currency': 'USDC',
 }
 
 BINANCE_CONFIG_PROD = {
@@ -44,7 +44,7 @@ BINANCE_CONFIG_PROD = {
         'leverage': LEVERAGE
     },
     'traded_tickers': TRADED_TICKERS_BINANCE,
-    'base_currency': 'USDC'
+    'base_currency': 'USDC',
 }
 
 KUCOIN_CONFIG_PROD = {
@@ -56,7 +56,7 @@ KUCOIN_CONFIG_PROD = {
         'leverage': LEVERAGE
     },
     'traded_tickers': TRADED_TICKERS_KUCOIN,
-    'base_currency': 'USDT'
+    'base_currency': 'USDT',
 }
 
 MEXC_CONFIG_PROD = {
@@ -64,10 +64,12 @@ MEXC_CONFIG_PROD = {
     'secret': MEXC_API_SECRET,
     'enableRateLimit': True,
     'options': {
-        'leverage': LEVERAGE
+        'leverage': LEVERAGE,
+        'defaultType': 'swap'
     },
     'traded_tickers': TRADED_TICKERS_MEXC,
-    'base_currency': 'USDT'
+    'base_currency': 'USDT',
+    'timeout': 3_000
 }
 
 SLACK_URL = os.environ.get("SLACK_URL")

@@ -39,4 +39,5 @@ def get_adjusted_amount(amount, precision):
     if precision == 0:
         return max(1, round(amount))
     else:
-        return round(amount, precision)
+        return round(amount, int(precision))  # Ensure precision is an integer
+
