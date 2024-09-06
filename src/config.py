@@ -13,6 +13,9 @@ KUCOIN_API_KEY = os.environ.get('KUCOIN_API_KEY')
 KUCOIN_API_SECRET = os.environ.get('KUCOIN_API_SECRET')
 KUCOIN_PASS = os.environ.get('KUCOIN_PASS')
 
+MEXC_API_KEY = os.environ.get('MEXC_API_KEY')
+MEXC_API_SECRET = os.environ.get('MEXC_API_SECRET')
+
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
 # exchanges
@@ -40,6 +43,15 @@ KUCOIN_CONFIG_PROD = {
     'apiKey': KUCOIN_API_KEY,
     'secret': KUCOIN_API_SECRET,
     'password': KUCOIN_PASS,
+    'enableRateLimit': True,
+    'options': {
+        'leverage': LEVERAGE
+    }
+}
+
+MEXC_CONFIG_PROD = {
+    'apiKey': MEXC_API_KEY,
+    'secret': MEXC_API_SECRET,
     'enableRateLimit': True,
     'options': {
         'leverage': LEVERAGE
@@ -106,7 +118,8 @@ class ProdConfig(Config):
     USE_SANDBOX = False
     EXCHANGES = {
         'binance': BINANCE_CONFIG_PROD,
-        'kucoinfutures': KUCOIN_CONFIG_PROD
+        'kucoinfutures': KUCOIN_CONFIG_PROD,
+        'mexc': MEXC_CONFIG_PROD
     }
 
 
