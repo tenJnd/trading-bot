@@ -17,16 +17,14 @@ from config import (TRADE_RISK_ALLOCATION,
                     ATR_PERIOD,
                     TURTLE_ENTRY_DAYS,
                     TURTLE_EXIT_DAYS,
-                    OHLC_HISTORY_W_BUFFER_DAYS,
                     PYRAMIDING_LIMIT,
                     AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT,
-                    SLACK_URL,
-                    TIMEFRAME)
+                    SLACK_URL)
 from exchange_adapter import BaseExchangeAdapter
 from src.model import trader_database
 from src.model.turtle_model import Order
 from src.schemas.turtle_schema import OrderSchema
-from src.utils.utils import save_json_to_file, get_adjusted_amount
+from src.utils.utils import save_json_to_file, get_adjusted_amount, StrategySettingsModel
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(SLACK_URL, __name__, __name__)
@@ -165,9 +163,11 @@ class TurtleTrader:
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
+                 strategy_settings: StrategySettingsModel = None,
                  db: PostgresqlAdapter = None,
-                 testing_file_path: bool = False
+                 testing_file_path: bool = False,
                  ):
+        self.strategy_settings = strategy_settings
         self._exchange = exchange
         self._database = trader_database if not db else db
 
@@ -274,13 +274,13 @@ class TurtleTrader:
         return round(float(pl), 2), round(float(pl_percent), 2)
 
     def get_curr_market_conditions(self, testing_file_path: str = None):
-        n_days_ago = datetime.now() - timedelta(days=OHLC_HISTORY_W_BUFFER_DAYS)
+        n_days_ago = datetime.now() - timedelta(days=self.strategy_settings.buffer_days)
         since_timestamp_ms = int(n_days_ago.timestamp() * 1000)
 
         if testing_file_path:
             ohlc = pd.read_csv(testing_file_path)
         else:
-            ohlc = self._exchange.fetch_ohlc(since=since_timestamp_ms, timeframe=TIMEFRAME)
+            ohlc = self._exchange.fetch_ohlc(since=since_timestamp_ms, timeframe=self.strategy_settings.timeframe)
 
         ohlc = calculate_atr(ohlc, period=ATR_PERIOD)
         ohlc = turtle_trading_signals_adjusted(ohlc)

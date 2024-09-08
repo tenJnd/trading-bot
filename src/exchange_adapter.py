@@ -50,10 +50,6 @@ class BaseExchangeAdapter:
         _logger.info("Markets loaded successfully")
 
     @property
-    def exchange_traded_tickers(self):
-        return self._exchange_config['traded_tickers']
-
-    @property
     def market_info(self):
         _logger.debug(f"Accessing market info for {self.market_futures}: "
                       f"{self.markets.get(self.market_futures, 'Market not found')}")

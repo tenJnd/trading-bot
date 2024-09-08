@@ -1,7 +1,10 @@
 import json
 import os
+from dataclasses import dataclass
 
 from src.config import TRADING_DATA_DIR
+from src.model import trader_database
+from src.model.turtle_model import StrategySettings
 from src.schemas.turtle_schema import OrderSchema
 
 
@@ -47,3 +50,39 @@ def get_adjusted_amount(amount, precision):
         return max(1, round(amount))
     else:
         return round(amount, int(precision))  # Ensure precision is an integer
+
+
+@dataclass
+class StrategySettingsModel:
+    exchange_id: str
+    ticker: str
+    timeframe: str
+    buffer_days: int
+
+
+def load_strategy_settings(exchange_id) -> StrategySettingsModel:
+    with trader_database.session_manager() as session:
+        # Querying the database
+        settings = session.query(
+            StrategySettings.exchange_id,
+            StrategySettings.ticker,
+            StrategySettings.timeframe,
+            StrategySettings.buffer_days
+        ).filter(
+            StrategySettings.exchange_id == exchange_id,
+        ).order_by(
+            StrategySettings.timestamp_created
+        )
+
+        # Create instances of StrategySettingsModel for each result
+        result_objects = [
+            StrategySettingsModel(
+                exchange_id=row.exchange_id,
+                ticker=row.ticker,
+                timeframe=row.timeframe,
+                buffer_days=row.buffer_days
+            )
+            for row in settings.all()
+        ]
+
+    return result_objects

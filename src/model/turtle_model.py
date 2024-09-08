@@ -1,5 +1,8 @@
-from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY, Integer
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy_utc import UtcDateTime
 
 from src.model import trader_database
 
@@ -56,6 +59,17 @@ class Order(TurtleBase):
     total_balance = Column(Float, nullable=True)
     pl = Column(Float, nullable=True)
     pl_percent = Column(Float, nullable=True)
+
+
+class StrategySettings(TurtleBase):
+    __tablename__ = 'strategy_settings'
+
+    id = Column(Integer, primary_key=True)
+    exchange_id = Column(String)
+    ticker = Column(String)
+    timeframe = Column(String)
+    buffer_days = Column(Integer)
+    timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 
 if __name__ == '__main__':

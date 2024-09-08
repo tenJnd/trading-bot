@@ -9,6 +9,7 @@ from slack_bot.notifications import SlackNotifier
 from config import SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
+from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
 
 _logger = logging.getLogger(__name__)
@@ -47,20 +48,21 @@ def close_position(exchange, ticker):
 
 
 @cli.command(help='run Turtle trading bot')
-@click.option('-exch', '--exchange', type=str, default='binance')
-def trade(exchange):
+@click.option('-exch', '--exchange_id', type=str, default='binance')
+def trade(exchange_id):
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")
     try:
+        strategy_settings = load_strategy_settings(exchange_id)
         # Using the factory to get the correct exchange adapter
-        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
 
-        _logger.info(f"Initialising Turtle trader, tickers: {exchange_adapter.exchange_traded_tickers}")
+        _logger.info(f"Initialising Turtle trader, tickers: {[x.ticker for x in strategy_settings]}")
         exchange_adapter.load_exchange()
 
-        for ticker in exchange_adapter.exchange_traded_tickers:
-            _logger.info(f"\n\n----------- Starting trade - {ticker} -----------")
-            exchange_adapter.market = f"{ticker}"
-            trader = TurtleTrader(exchange_adapter)
+        for strategy in strategy_settings:
+            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker} -----------")
+            exchange_adapter.market = f"{strategy.ticker}"
+            trader = TurtleTrader(exchange_adapter, strategy)
             _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
             trader.trade()
 
