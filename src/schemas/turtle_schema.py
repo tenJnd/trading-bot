@@ -32,6 +32,7 @@ class OrderSchema(Schema):
     stop_loss_price = fields.Float(allow_none=True, data_key="stopLossPrice")
     info = fields.Dict(allow_none=True)
 
+    exchange = fields.Str(allow_none=False)
     agg_trade_id = fields.Str(missing=None)
 
     atr = fields.Float(missing=None)
@@ -50,4 +51,3 @@ class OrderSchema(Schema):
     @post_load
     def make_order(self, data, **kwargs):
         return Order(**data)
-

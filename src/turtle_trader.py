@@ -262,16 +262,16 @@ class TurtleTrader:
 
     def calculate_pl(self, close_order: OrderSchema):
         if self.last_opened_position.is_long():
-            total_cost = self.opened_positions.cost.sum()
-            total_revenue = close_order.cost
+            total_cost = float(self.opened_positions.cost.sum())
+            total_revenue = float(close_order.cost)
         else:
-            total_cost = close_order.cost
-            total_revenue = self.opened_positions.cost.sum()
+            total_cost = float(close_order.cost)
+            total_revenue = float(self.opened_positions.cost.sum())
 
         pl = total_revenue - total_cost
         pl_percent = (pl / total_cost) * 100
 
-        return round(pl, 2), round(pl_percent, 2)
+        return round(float(pl), 2), round(float(pl_percent), 2)
 
     def get_curr_market_conditions(self, testing_file_path: str = None):
         n_days_ago = datetime.now() - timedelta(days=OHLC_HISTORY_W_BUFFER_DAYS)
@@ -346,11 +346,6 @@ class TurtleTrader:
 
     def save_order(self, order: OrderSchema, action, position_status='opened'):
         _logger.info('Saving order to file and DB')
-        try:
-            save_json_to_file(order, f"order_{order['id']}")
-        except Exception as exc:
-            _logger.error(f"Cannot save json file, skipp. {exc}")
-            _notifier.error(f"Cannot save json file, skipp. {exc}")
 
         self._exchange.fetch_balance()
 
@@ -369,6 +364,12 @@ class TurtleTrader:
         if action == 'close':
             order_object.closed_positions = self.opened_positions_ids
             order_object.pl, order_object.pl_percent = self.calculate_pl(order_object)
+
+        try:
+            save_json_to_file(order_object, f"order_{order['id']}")
+        except Exception as exc:
+            _logger.error(f"Cannot save json file, skipp. {exc}")
+            _notifier.error(f"Cannot save json file, skipp. {exc}")
 
         self.commit_order_to_db(order_object)
 

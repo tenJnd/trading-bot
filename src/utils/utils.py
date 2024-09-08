@@ -2,6 +2,7 @@ import json
 import os
 
 from src.config import TRADING_DATA_DIR
+from src.schemas.turtle_schema import OrderSchema
 
 
 def significant_round(num, places):
@@ -29,10 +30,16 @@ def significant_round(num, places):
     return num
 
 
-def save_json_to_file(json_data, file_name):
+def save_json_to_file(order_data: OrderSchema, file_name: str):
+    # Convert the order data to a dictionary
+    order_dict = order_data.dump(order_data)
+
+    # Define the file path
     out_file = os.path.join(TRADING_DATA_DIR, f'{file_name}.json')
+
+    # Write the dictionary as a JSON file
     with open(out_file, "w") as ff:
-        ff.write(json.dumps(json_data, indent=4, ensure_ascii=False))
+        json.dump(order_dict, ff, indent=4, ensure_ascii=False)
 
 
 def get_adjusted_amount(amount, precision):
@@ -40,4 +47,3 @@ def get_adjusted_amount(amount, precision):
         return max(1, round(amount))
     else:
         return round(amount, int(precision))  # Ensure precision is an integer
-
