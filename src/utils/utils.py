@@ -33,9 +33,12 @@ def significant_round(num, places):
     return num
 
 
-def save_json_to_file(order_data: OrderSchema, file_name: str):
-    # Convert the order data to a dictionary
-    order_dict = order_data.dump(order_data)
+def save_json_to_file(order_data: dict, file_name: str):
+    # Create an instance of OrderSchema
+    order_schema = OrderSchema()
+
+    # Use OrderSchema instance to dump the order_data into a dictionary
+    order_dict = order_schema.dump(order_data)
 
     # Define the file path
     out_file = os.path.join(TRADING_DATA_DIR, f'{file_name}.json')
