@@ -317,7 +317,9 @@ class TurtleTrader:
 
             actual_asset_allocation = self.opened_positions.cost.sum() / total_balance
             if actual_asset_allocation > MAX_ONE_ASSET_RISK_ALLOCATION:
-                _logger.warning(f'This trade would excess max capital allocation into one asset')
+                _logger.warning(f'This trade would excess max capital allocation into one asset'
+                                f'actual current allocation: {actual_asset_allocation},'
+                                f'max one asset risk allocation: {MAX_ONE_ASSET_RISK_ALLOCATION}')
                 raise AssetAllocationOverRiskLimit
 
             return free_balance
