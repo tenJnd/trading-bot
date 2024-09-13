@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass
+from typing import List
 
 from src.config import TRADING_DATA_DIR
 from src.model import trader_database
@@ -55,37 +56,61 @@ def get_adjusted_amount(amount, precision):
         return round(amount, int(precision))  # Ensure precision is an integer
 
 
+def none_to_default(value, default):
+    return default if value is None else value
+
+
 @dataclass
 class StrategySettingsModel:
     exchange_id: str
     ticker: str
     timeframe: str
     buffer_days: int
+    stop_loss_atr_multipl: int
+    pyramid_entry_atr_multipl: float
+    aggressive_pyramid_entry_multipl: float
+    aggressive_price_atr_ratio: float
+    pyramid_entry_limit: int
+
+    @classmethod
+    def from_orm(cls, orm_obj):
+        # Use helper function to replace None with default
+        return cls(
+            exchange_id=orm_obj.exchange_id,
+            ticker=orm_obj.ticker,
+            timeframe=orm_obj.timeframe,
+            buffer_days=orm_obj.buffer_days,
+            stop_loss_atr_multipl=none_to_default(orm_obj.stop_loss_atr_multipl, 2),
+            pyramid_entry_atr_multipl=none_to_default(orm_obj.pyramid_entry_atr_multipl, 1),
+            aggressive_pyramid_entry_multipl=none_to_default(orm_obj.aggressive_pyramid_entry_multipl, 0.5),
+            aggressive_price_atr_ratio=none_to_default(orm_obj.aggressive_price_atr_ratio, 0.02),
+            pyramid_entry_limit=none_to_default(orm_obj.pyramid_entry_limit, 4)
+        )
 
 
-def load_strategy_settings(exchange_id) -> StrategySettingsModel:
+def load_strategy_settings(exchange_id) -> List[StrategySettingsModel]:
     with trader_database.session_manager() as session:
-        # Querying the database
+        # Querying only the necessary columns
         settings = session.query(
             StrategySettings.exchange_id,
             StrategySettings.ticker,
             StrategySettings.timeframe,
-            StrategySettings.buffer_days
+            StrategySettings.buffer_days,
+            StrategySettings.stop_loss_atr_multipl,
+            StrategySettings.pyramid_entry_atr_multipl,
+            StrategySettings.aggressive_pyramid_entry_multipl,
+            StrategySettings.aggressive_price_atr_ratio,
+            StrategySettings.pyramid_entry_limit
         ).filter(
             StrategySettings.exchange_id == exchange_id,
         ).order_by(
             StrategySettings.timestamp_created
-        )
+        ).all()
 
-        # Create instances of StrategySettingsModel for each result
-        result_objects = [
-            StrategySettingsModel(
-                exchange_id=row.exchange_id,
-                ticker=row.ticker,
-                timeframe=row.timeframe,
-                buffer_days=row.buffer_days
-            )
-            for row in settings.all()
-        ]
+    # Convert the SQLAlchemy result rows to StrategySettingsModel using from_orm
+    result_objects = [
+        StrategySettingsModel.from_orm(row)
+        for row in settings
+    ]
 
     return result_objects

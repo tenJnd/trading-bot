@@ -75,21 +75,11 @@ MAX_ONE_ASSET_RISK_ALLOCATION = float(os.environ.get(
     'MAX_ONE_ASSET_RISK_ALLOCATION',
     0.5
 ))  # maximum of capital in one asset traded
-STOP_LOSS_ATR_MULTIPL = float(
-    os.environ.get('STOP_LOSS_ATR_MULTIPL', 2))  # multiplication of atr to determine stop-loss
 
 # timeframes
 ATR_PERIOD = int(os.environ.get('ATR_PERIOD', 20))  # 20 for slow, 50 for fast
 TURTLE_ENTRY_DAYS = int(os.environ.get('TURTLE_ENTRY_DAYS', ATR_PERIOD))  # 20 for fast, 50 for slow
 TURTLE_EXIT_DAYS = int(os.environ.get('TURTLE_EXIT_DAYS', 10))  # 10 for fast, 20 for slow
-
-# pyramiding
-PYRAMIDING_LIMIT = int(os.environ.get('PYRAMIDING_LIMIT', 4))  # max pyramid trades (1 init, 3 pyramid)
-# atr/price ratio lower than n means less volatile market
-AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT = float(os.environ.get(
-    'AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT',
-    0.02
-))
 
 
 class Config:

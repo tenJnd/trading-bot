@@ -13,18 +13,16 @@ from sqlalchemy.exc import OperationalError, TimeoutError
 
 from config import (TRADE_RISK_ALLOCATION,
                     MAX_ONE_ASSET_RISK_ALLOCATION,
-                    STOP_LOSS_ATR_MULTIPL,
                     ATR_PERIOD,
                     TURTLE_ENTRY_DAYS,
                     TURTLE_EXIT_DAYS,
-                    PYRAMIDING_LIMIT,
-                    AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT,
                     SLACK_URL)
 from exchange_adapter import BaseExchangeAdapter
+from model.turtle_model import StrategySettings
 from src.model import trader_database
 from src.model.turtle_model import Order
 from src.schemas.turtle_schema import OrderSchema
-from src.utils.utils import save_json_to_file, get_adjusted_amount, StrategySettingsModel
+from src.utils.utils import save_json_to_file, get_adjusted_amount
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(SLACK_URL, __name__, __name__)
@@ -60,14 +58,6 @@ class LastOpenedPosition:
 
     def get_atr_price_ratio(self):
         return self.atr / self.price
-
-    def get_atr_for_pyramid(self):
-        # lower atr for entry to half for pyramid trade
-        # if atr/price ration is lower than 2% (less volatile market)
-        atr_ratio = self.get_atr_price_ratio()
-        if atr_ratio < AGGRESSIVE_PYRAMID_ATR_PRICE_RATIO_LIMIT:
-            return self.atr * 0.5
-        return self.atr
 
 
 @dataclass
@@ -163,7 +153,7 @@ class TurtleTrader:
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
-                 strategy_settings: StrategySettingsModel = None,
+                 strategy_settings: StrategySettings = None,
                  db: PostgresqlAdapter = None,
                  testing_file_path: bool = False,
                  ):
@@ -304,6 +294,14 @@ class TurtleTrader:
         else:
             return
 
+    def get_atr_for_pyramid(self):
+        # lower atr for entry to half for pyramid trade
+        # if atr/price ration is lower than 2% (less volatile market)
+        atr_ratio = self.last_opened_position.get_atr_price_ratio()
+        if atr_ratio < self.strategy_settings.aggressive_price_atr_ratio:
+            return self.last_opened_position.atr * self.strategy_settings.aggressive_pyramid_entry_multipl
+        return self.last_opened_position.atr * self.strategy_settings.pyramid_entry_atr_multipl
+
     def recalc_limited_free_entry_balance(self, free_balance, total_balance):
         if self.last_opened_position:
             # This is to ensure that the pyramid position is not larger than the last position
@@ -358,7 +356,7 @@ class TurtleTrader:
         order_object.total_balance = self._exchange.total_balance
         order_object.position_status = position_status
         order_object.agg_trade_id = self.create_agg_trade_id()
-        atr2 = STOP_LOSS_ATR_MULTIPL * order_object.atr
+        atr2 = self.strategy_settings.stop_loss_atr_multipl * order_object.atr
         order_object.stop_loss_price = self.get_stop_loss_price(action, atr2)
 
         order_object.exchange = self._exchange.exchange_id
@@ -368,7 +366,7 @@ class TurtleTrader:
             order_object.pl, order_object.pl_percent = self.calculate_pl(order_object)
 
         try:
-            save_json_to_file(order_object, f"order_{order['id']}")
+            save_json_to_file(order_object, f"order_{order_object.id}")
         except Exception as exc:
             _logger.error(f"Cannot save json file, skipp. {exc}")
             _notifier.error(f"Cannot save json file, skipp. {exc}")
@@ -392,7 +390,7 @@ class TurtleTrader:
         free_balance = self.recalc_limited_free_entry_balance(free_balance, total_balance)
 
         trade_risk_cap = free_balance * TRADE_RISK_ALLOCATION
-        amount = trade_risk_cap / (STOP_LOSS_ATR_MULTIPL * self.curr_market_conditions.ATR)
+        amount = trade_risk_cap / (self.strategy_settings.stop_loss_atr_multipl * self.curr_market_conditions.ATR)
         _logger.info(f"Amount before rounding: {amount}")
         amount = get_adjusted_amount(amount, self._exchange.amount_precision)
         _logger.info(f"Amount after precision rounding: {amount}")
@@ -427,12 +425,12 @@ class TurtleTrader:
         last_stop_loss = self.last_opened_position.stop_loss_price
 
         # set trigger price for pyramid trade
-        pyramid_atr = self.last_opened_position.get_atr_for_pyramid()
+        pyramid_atr = self.get_atr_for_pyramid()
         long_pyramid_price = self.last_opened_position.price + pyramid_atr
         short_pyramid_price = self.last_opened_position.price - pyramid_atr
 
         # check if number of pyramid trade is over limit
-        pyramid_stop = self.n_of_opened_positions > PYRAMIDING_LIMIT
+        pyramid_stop = self.n_of_opened_positions > self.strategy_settings.pyramid_entry_limit
 
         if self.last_opened_position.is_long():
             # exit position

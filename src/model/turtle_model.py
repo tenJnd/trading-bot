@@ -69,6 +69,11 @@ class StrategySettings(TurtleBase):
     ticker = Column(String)
     timeframe = Column(String)
     buffer_days = Column(Integer)
+    stop_loss_atr_multipl = Column(Float)  # multiplying ATR for stop-loss price
+    pyramid_entry_atr_multipl = Column(Float)  # Multiplying ATR for pyramid entry
+    aggressive_pyramid_entry_multipl = Column(Float)  # multiply ATR for pyramid entry when price/ratio con is met
+    aggressive_price_atr_ratio = Column(Float)  # price/atr ration when we use aggressive entry (with lowe ATR)
+    pyramid_entry_limit = Column(Integer)  # How many pyramid entries we can do for one asset (4 = 1 init, 3 pyramid)
     timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 
