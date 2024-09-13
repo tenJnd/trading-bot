@@ -196,7 +196,7 @@ class BaseExchangeAdapter:
                 params=self.params
             )
 
-            _notifier.info(f"{str.upper(side)} {self.market} | amount: {amount}")
+            _logger.info(f"{str.upper(side)} {self.market} | amount: {amount}")
             return order
 
         except (ccxt.NetworkError, ccxt.ExchangeError) as e:

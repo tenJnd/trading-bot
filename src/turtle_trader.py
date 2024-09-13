@@ -375,6 +375,16 @@ class TurtleTrader:
 
         self.commit_order_to_db(order_object)
 
+        msg = (f"Entered {order_object.symbol}\n"
+               f"Position: {order_object.action}\n"
+               f"Amount: {order_object.amount}\n"
+               f"Cost: {order_object.cost}\n"
+               f"Stop-loss price: {order_object.stop_loss_price}\n"
+               f"PL: {order_object.pl}\n"
+               f"PL%: {order_object.pl_percent}\n")
+        _logger.info(msg)
+        _notifier.info(msg)
+
     def entry_position(self, action):
         self._exchange.fetch_balance()
         free_balance = self._exchange.free_balance
