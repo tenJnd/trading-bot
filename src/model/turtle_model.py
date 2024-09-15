@@ -77,6 +77,8 @@ class StrategySettings(TurtleBase):
     pyramid_entry_limit = Column(Integer)  # How many pyramid entries we can do for one asset (4 = 1 init, 3 pyramid)
     timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    active = Column(Boolean, default=False)
+
 
 if __name__ == '__main__':
     trader_database.init_schema(Base.metadata)
