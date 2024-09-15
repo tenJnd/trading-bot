@@ -11,16 +11,16 @@ services:
     entrypoint: ["python"]
     command: ["src/main.py", "trade"]
 
-#  trading-bot-mexc:
-#    container_name: trading-bot-mexc
-#    image: tenjnd/trading-bot:latest
-#    env_file:
-#      - .env
-#    network_mode: "host"
-#    volumes:
-#      - trading-data-volume:/app/trading_data
-#    entrypoint: ["python"]
-#    command: ["src/main.py", "trade", "-exch", "mexc"]
+  trading-bot-kucoin:
+    container_name: trading-bot-kucoin
+    image: tenjnd/trading-bot:latest
+    env_file:
+      - .env
+    network_mode: "host"
+    volumes:
+      - trading-data-volume:/app/trading_data
+    entrypoint: ["python"]
+    command: ["src/main.py", "trade", "-exch", "kucoinfutures"]
 
 volumes:
   trading-data-volume:

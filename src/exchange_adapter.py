@@ -71,7 +71,10 @@ class BaseExchangeAdapter:
 
     @property
     def contract_size(self):
-        return self.market_info.get('contract_size', 1)
+        try:
+            return self.market_info['contract_size']
+        except KeyError:
+            return self.market_info.get('contractSize', 1)
 
     @property
     def free_balance(self):
@@ -107,7 +110,7 @@ class BaseExchangeAdapter:
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
     def fetch_ohlc(self, since, timeframe: str = '1d'):
-        candles = self._exchange.fetchOHLCV(self._market, timeframe=timeframe, since=since)
+        candles = self._exchange.fetchOHLCV(self.market_futures, timeframe=timeframe, since=since)
         candles_df = pd.DataFrame(candles, columns=['timeframe', 'O', 'H', 'L', 'C', 'V'])
         candles_df['datetime'] = pd.to_datetime(candles_df['timeframe'], unit='ms')
         return candles_df

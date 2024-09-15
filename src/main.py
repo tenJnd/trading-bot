@@ -58,11 +58,11 @@ def trade(exchange_id):
         # Using the factory to get the correct exchange adapter
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
 
-        _logger.info(f"Initialising Turtle trader, tickers: {[x.ticker for x in strategy_settings]}")
+        _logger.info(f"Initialising Turtle trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
         exchange_adapter.load_exchange()
 
         for strategy in strategy_settings:
-            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker} -----------")
+            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
             trader = TurtleTrader(exchange_adapter, strategy)
             _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
