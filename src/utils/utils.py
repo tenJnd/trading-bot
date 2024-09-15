@@ -106,6 +106,7 @@ def load_strategy_settings(exchange_id) -> List[StrategySettingsModel]:
             StrategySettings.pyramid_entry_limit
         ).filter(
             StrategySettings.exchange_id == exchange_id,
+            StrategySettings.active == True
         ).order_by(
             StrategySettings.timestamp_created
         ).all()
