@@ -60,6 +60,7 @@ class Order(TurtleBase):
     pl = Column(Float, nullable=True)
     pl_percent = Column(Float, nullable=True)
 
+    contract_size = Column(Float, nullable=True)
 
 class StrategySettings(TurtleBase):
     __tablename__ = 'strategy_settings'
