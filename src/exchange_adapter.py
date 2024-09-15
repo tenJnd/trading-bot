@@ -70,6 +70,10 @@ class BaseExchangeAdapter:
         return min_cost if min_cost else 0
 
     @property
+    def contract_size(self):
+        return self.market_info.get('contract_size', 1)
+
+    @property
     def free_balance(self):
         if not self.balance:
             self.fetch_balance()
