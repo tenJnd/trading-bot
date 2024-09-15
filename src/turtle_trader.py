@@ -197,8 +197,7 @@ class TurtleTrader:
                     Order.pl
                 ).filter(
                     Order.position_status == 'opened',
-                    Order.symbol == self._exchange.market_futures,
-                    Order.exchange == self._exchange.exchange_id
+                    Order.strategy_id == self.strategy_settings.id
                 ).order_by(
                     Order.timestamp
                 ).statement,
@@ -361,6 +360,7 @@ class TurtleTrader:
 
         order_object.exchange = self._exchange.exchange_id
         order_object.contract_size = self._exchange.contract_size
+        order_object.strategy_id = self.strategy_settings.id
 
         if action == 'close':
             order_object.closed_positions = self.opened_positions_ids

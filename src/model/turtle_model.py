@@ -1,9 +1,8 @@
 from datetime import datetime, timezone
-
-from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY, Integer
+from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY, Integer, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy_utc import UtcDateTime
-
 from src.model import trader_database
 
 Base = declarative_base()
@@ -61,6 +60,11 @@ class Order(TurtleBase):
     pl_percent = Column(Float, nullable=True)
 
     contract_size = Column(Float, nullable=True)
+    strategy_id = Column(Integer, ForeignKey('turtle_strategy.strategy_settings.id'), nullable=True)
+
+    # Relationship to StrategySettings
+    strategy = relationship("StrategySettings", back_populates="orders")
+
 
 class StrategySettings(TurtleBase):
     __tablename__ = 'strategy_settings'
@@ -78,6 +82,9 @@ class StrategySettings(TurtleBase):
     timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     active = Column(Boolean, default=False)
+
+    # Relationship to Order
+    orders = relationship("Order", back_populates="strategy")
 
 
 if __name__ == '__main__':
