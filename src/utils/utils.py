@@ -62,6 +62,7 @@ def none_to_default(value, default):
 
 @dataclass
 class StrategySettingsModel:
+    id: int
     exchange_id: str
     ticker: str
     timeframe: str
@@ -76,10 +77,11 @@ class StrategySettingsModel:
     def from_orm(cls, orm_obj):
         # Use helper function to replace None with default
         return cls(
+            id=orm_obj.id,
             exchange_id=orm_obj.exchange_id,
             ticker=orm_obj.ticker,
             timeframe=orm_obj.timeframe,
-            buffer_days=orm_obj.buffer_days,
+            buffer_days=none_to_default(orm_obj.buffer_days, 30),
             stop_loss_atr_multipl=none_to_default(orm_obj.stop_loss_atr_multipl, 2),
             pyramid_entry_atr_multipl=none_to_default(orm_obj.pyramid_entry_atr_multipl, 1),
             aggressive_pyramid_entry_multipl=none_to_default(orm_obj.aggressive_pyramid_entry_multipl, 0.5),
@@ -92,6 +94,7 @@ def load_strategy_settings(exchange_id) -> List[StrategySettingsModel]:
     with trader_database.session_manager() as session:
         # Querying only the necessary columns
         settings = session.query(
+            StrategySettings.id,
             StrategySettings.exchange_id,
             StrategySettings.ticker,
             StrategySettings.timeframe,
