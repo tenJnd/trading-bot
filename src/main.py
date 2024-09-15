@@ -53,6 +53,8 @@ def trade(exchange_id):
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")
     try:
         strategy_settings = load_strategy_settings(exchange_id)
+        if not strategy_settings:
+            return _logger.info("No active strategy found, skipping")
         # Using the factory to get the correct exchange adapter
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
 
