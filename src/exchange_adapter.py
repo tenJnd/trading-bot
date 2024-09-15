@@ -190,8 +190,11 @@ class BaseExchangeAdapter:
             # if self.open_position_side:
             #     _logger.info(f"There is already one open position")
             #     self.close_position()
+            try:
+                self._exchange.set_leverage(leverage, self.market_futures)
+            except ccxt.errors.NotSupported:
+                _logger.info(f"Leverage set up not supported on this exchange!")
 
-            self._exchange.set_leverage(leverage, self.market_futures)
             _logger.info(f"creating order: {side}, "
                          f"amount: {amount}, "
                          f"params: {self.params}")
