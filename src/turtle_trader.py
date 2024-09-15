@@ -360,6 +360,7 @@ class TurtleTrader:
         order_object.stop_loss_price = self.get_stop_loss_price(action, atr2)
 
         order_object.exchange = self._exchange.exchange_id
+        order_object.contract_size = self._exchange.contract_size
 
         if action == 'close':
             order_object.closed_positions = self.opened_positions_ids
@@ -393,8 +394,15 @@ class TurtleTrader:
                             f"SKIPPING ticker")
             return
 
-        _logger.info(f'Creating {action} order. '
-                     f'Adjusted Amount with Precision {self._exchange.amount_precision}: {amount}')
+        # each exchange has its own contract size
+        # for example DOGE on binance = 1 but on mexc = 100
+        # if we want to buy 100 of doge on binance = 100 contracts
+        # but on mexc = 1 contract
+        amount = amount / self._exchange.contract_size
+        _logger.info(f"Amount: {amount}"
+                     f"Contract size: {self._exchange.contract_size}"
+                     f"Amount of contracts: {amount}")
+
         order = self._exchange.order(action, amount)
 
         if order:
