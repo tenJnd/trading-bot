@@ -4,6 +4,7 @@ import traceback
 
 import click
 from jnd_utils.log import init_logging
+from numpy.core.defchararray import upper
 from slack_bot.notifications import SlackNotifier
 
 from config import SLACK_URL
@@ -36,11 +37,17 @@ def log_pl(exchange, ticker):
 def close_position(exchange, ticker):
     _logger.info(f"\n============== CLOSING POSITION {ticker} ==============\n")
     try:
+        strategy_settings = load_strategy_settings(exchange)
+        if not strategy_settings:
+            return _logger.info("No active strategy found, skipping")
+
         exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
         exchange.load_exchange()
-        exchange.market = f"{ticker}"
-        trader = TurtleTrader(exchange)
-        trader.close_position()
+        for strategy in strategy_settings:
+            if strategy.ticker == upper(ticker):
+                exchange.market = f"{ticker}"
+                trader = TurtleTrader(exchange, strategy)
+                trader.close_position()
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
         _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}")

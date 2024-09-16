@@ -136,6 +136,12 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
+    def fetch_order(self, order_id):
+        return self._exchange.fetch_order(order_id, self.market_futures)
+
+    @retry(retry_on_exception=retry_if_network_error,
+           stop_max_attempt_number=5,
+           wait_exponential_multiplier=1500)
     def opened_position(self):
         _logger.info(f"getting open positions")
 

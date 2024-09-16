@@ -343,8 +343,16 @@ class TurtleTrader:
             session.add(order_object)
         _logger.info('Order successfully saved')
 
-    def save_order(self, order: OrderSchema, action, position_status='opened'):
+    def save_order(self, order, action, position_status='opened'):
         _logger.info('Saving order to file and DB')
+
+        if order.get('status', None) is None:
+            try:
+                order_id = order.get('id')
+                order = self._exchange.fetch_order(order_id)
+            except Exception as exc:
+                _logger.warning(f"Could not fetch the order, saved order might be incomplete: {exc}")
+                _logger.warning(f"Could not fetch the order, saved order might be incomplete: {exc}")
 
         self._exchange.fetch_balance()
 
