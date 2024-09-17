@@ -416,10 +416,12 @@ class TurtleTrader:
         if order:
             self.save_order(order, action)
 
-        msg = (f"Entered {self.strategy_settings.ticker}\n"
+        msg = (f"Exchange: {self._exchange.exchange_id}\n"
+               f"strategy id: {self.strategy_settings.id}\n"
+               f"Entered {self.strategy_settings.ticker}\n"
                f"Position: {action}\n"
-               f"Amount: {amount}\n"
-               f"Cost: {cost}\n")
+               f"Amount: {amount} (amount can be different based on exchange handling contract size)\n"
+               f"Cost: {cost} (amount can be different based on exchange handling contract size)\n")
         _logger.info(msg)
         _notifier.info(msg)
 
