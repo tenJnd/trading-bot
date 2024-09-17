@@ -137,7 +137,10 @@ class BaseExchangeAdapter:
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
     def fetch_order(self, order_id):
-        return self._exchange.fetch_order(order_id, self.market_futures)
+        try:
+            return self._exchange.fetch_order(order_id, self.market_futures)
+        except ccxt.errors.NotSupported:
+            return self._exchange.fetchOpenOrder(order_id, self.market_futures)
 
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
@@ -187,8 +190,6 @@ class BaseExchangeAdapter:
         _logger.info(f"entering {str.upper(side)} position")
         leverage = self.params.get('leverage', 1)
 
-        _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
-
         try:
             # self.opened_position()
             # self.assert_side(side)
@@ -197,9 +198,10 @@ class BaseExchangeAdapter:
             #     _logger.info(f"There is already one open position")
             #     self.close_position()
             try:
+                _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
                 self._exchange.set_leverage(leverage, self.market_futures)
-            except ccxt.errors.NotSupported:
-                _logger.info(f"Leverage set up not supported on this exchange!")
+            except Exception as exc:
+                _logger.info(f"Leverage set up not supported on this exchange! {traceback.format_exc()}")
 
             _logger.info(f"creating order: {side}, "
                          f"amount: {amount}, "
@@ -235,7 +237,7 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1000)
-    def close_position(self):
+    def close_position(self, amount: float = None):
         _logger.info(f"closing position")
 
         params = {'reduceOnly': True}
@@ -249,14 +251,15 @@ class BaseExchangeAdapter:
 
             side = 'buy' if self.open_position_side == 'sell' else 'sell'
 
+            amount = self.open_position_amount if not amount else amount
             _logger.info(f"creating order: {side}, "
-                         f"amount: {self.open_position_amount}, "
+                         f"amount: {amount}, "
                          f"params: {params}")
             order = self._exchange.create_order(
                 symbol=self.market_futures,
                 type='market',
                 side=side,
-                amount=self.open_position_amount,
+                amount=amount,
                 params=params
             )
 
@@ -287,7 +290,7 @@ class BaseExchangeAdapter:
 
         if side:
             return position_order(side, amount)
-        return position_order()
+        return position_order(amount)
 
 
 class MexcExchange(BaseExchangeAdapter):

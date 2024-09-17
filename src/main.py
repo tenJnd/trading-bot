@@ -33,9 +33,9 @@ def log_pl(exchange, ticker):
 
 @cli.command(help='close position manually')
 @click.option('-exch', '--exchange', type=str, default='binance')
-@click.option('-t', '--ticker', type=str, default='BTC')
-def close_position(exchange, ticker):
-    _logger.info(f"\n============== CLOSING POSITION {ticker} ==============\n")
+@click.option('-si', '--strategy_id', type=int)
+def close_position(exchange, strategy_id):
+    _logger.info(f"\n============== CLOSING POSITION {strategy_id} ==============\n")
     try:
         strategy_settings = load_strategy_settings(exchange)
         if not strategy_settings:
@@ -44,8 +44,8 @@ def close_position(exchange, ticker):
         exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
         exchange.load_exchange()
         for strategy in strategy_settings:
-            if strategy.ticker == upper(ticker):
-                exchange.market = f"{ticker}"
+            if strategy.id == strategy_id:
+                exchange.market = f"{strategy.ticker}"
                 trader = TurtleTrader(exchange, strategy)
                 trader.close_position()
     except Exception as e:
