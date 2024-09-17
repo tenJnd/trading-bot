@@ -15,7 +15,7 @@ class ExchangeFactory:
     @staticmethod
     def get_exchange(exchange_id: str, market: str = None) -> ccxt.Exchange:
         _logger.info(f"Creating exchange adapter for {exchange_id}")
-        if exchange_id in ['binance', 'kucoinfutures']:
+        if exchange_id in ['binance', 'kucoinfutures', 'bybit']:
             return BaseExchangeAdapter(exchange_id, market)
         elif exchange_id == 'mexc':
             return MexcExchange(exchange_id, market)

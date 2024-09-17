@@ -16,6 +16,9 @@ KUCOIN_PASS = os.environ.get('KUCOIN_PASS')
 MEXC_API_KEY = os.environ.get('MEXC_API_KEY')
 MEXC_API_SECRET = os.environ.get('MEXC_API_SECRET')
 
+BYBIT_API_KEY = os.environ.get('BYBIT_API_KEY')
+BYBIT_API_SECRET = os.environ.get('BYBIT_API_SECRET')
+
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
 
@@ -65,6 +68,17 @@ MEXC_CONFIG_PROD = {
     'timeout': 30_000
 }
 
+BYBIT_CONFIG_PROD = {
+    'apiKey': BYBIT_API_KEY,
+    'secret': BYBIT_API_SECRET,
+    'enableRateLimit': True,
+    'options': {
+        'leverage': LEVERAGE,
+        'defaultType': 'swap'
+    },
+    'base_currency': 'USDT',
+}
+
 SLACK_URL = os.environ.get("SLACK_URL")
 APP_SETTINGS = os.environ.get("APP_SETTINGS", "DevConfig")
 
@@ -102,7 +116,8 @@ class ProdConfig(Config):
     EXCHANGES = {
         'binance': BINANCE_CONFIG_PROD,
         'kucoinfutures': KUCOIN_CONFIG_PROD,
-        'mexc': MEXC_CONFIG_PROD
+        'mexc': MEXC_CONFIG_PROD,
+        'bybit': BYBIT_CONFIG_PROD
     }
 
 
