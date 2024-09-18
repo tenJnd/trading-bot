@@ -47,6 +47,7 @@ class OrderSchema(Schema):
 
     contract_size = fields.Float(missing=1.0)
     strategy_id = fields.Integer(missing=None)
+    atr_period_ratio = fields.Float(missing=1.0)
 
     class Meta:
         unknown = EXCLUDE

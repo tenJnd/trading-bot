@@ -61,6 +61,7 @@ class Order(TurtleBase):
 
     contract_size = Column(Float, nullable=True)
     strategy_id = Column(Integer, ForeignKey('turtle_strategy.strategy_settings.id'), nullable=True)
+    atr_period_ratio = Column(Float, nullable=False, default=1.0)
 
     # Relationship to StrategySettings
     strategy = relationship("StrategySettings", back_populates="orders")
