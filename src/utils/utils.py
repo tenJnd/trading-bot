@@ -81,7 +81,7 @@ class StrategySettingsModel:
             exchange_id=orm_obj.exchange_id,
             ticker=orm_obj.ticker,
             timeframe=orm_obj.timeframe,
-            buffer_days=none_to_default(orm_obj.buffer_days, 30),
+            buffer_days=none_to_default(orm_obj.buffer_days, 60),
             stop_loss_atr_multipl=none_to_default(orm_obj.stop_loss_atr_multipl, 2),
             pyramid_entry_atr_multipl=none_to_default(orm_obj.pyramid_entry_atr_multipl, 1),
             aggressive_pyramid_entry_multipl=none_to_default(orm_obj.aggressive_pyramid_entry_multipl, 0.5),

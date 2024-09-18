@@ -52,6 +52,7 @@ class LastOpenedPosition:
     atr: float
     free_balance: float
     pl: float
+    atr_period_ratio: float
 
     def is_long(self):
         return self.action == 'long'
@@ -70,6 +71,7 @@ class CurrMarketConditions:
     V: float
     datetime: str
     ATR: float
+    atr_long_period: float
     d20_High: float
     d20_Low: float
     d10_High: float
@@ -85,8 +87,12 @@ class CurrMarketConditions:
                      f'SHORT ENTRY cond: {self.Short_Entry}\n'
                      f'SHORT EXIT cond: {self.Short_Exit}')
 
+    @property
+    def atr_period_ratio(self):
+        return self.ATR / self.atr_long_period
 
-def calculate_atr(df, period=ATR_PERIOD):
+
+def calculate_atr(df, period=ATR_PERIOD, long_period=50):
     """
     Calculate the Average True Range (ATR) for given OHLCV DataFrame.
 
@@ -107,6 +113,7 @@ def calculate_atr(df, period=ATR_PERIOD):
 
     # Calculate the ATR
     df['ATR'] = df['TrueRange'].rolling(window=period, min_periods=1).mean()
+    df['atr_long_period'] = df['TrueRange'].rolling(window=long_period, min_periods=1).mean()
 
     # Clean up the DataFrame by removing the intermediate columns
     df.drop(['High-Low', 'High-PrevClose', 'Low-PrevClose', 'TrueRange'], axis=1, inplace=True)
@@ -194,7 +201,8 @@ class TurtleTrader:
                     Order.stop_loss_price,
                     Order.atr,
                     Order.free_balance,
-                    Order.pl
+                    Order.pl,
+                    Order.atr_period_ratio
                 ).filter(
                     Order.position_status == 'opened',
                     Order.strategy_id == self.strategy_settings.id
@@ -284,8 +292,8 @@ class TurtleTrader:
         else:
             return self.last_opened_position.agg_trade_id
 
-    def get_stop_loss_price(self, action, atr2):
-        # save stop-loss price
+    def get_stop_loss_price(self, action, atr):
+        atr2 = self.strategy_settings.stop_loss_atr_multipl * atr * self.curr_market_conditions.atr_period_ratio
         if action == 'long':  # long
             return self.curr_market_conditions.C - atr2
         elif action == 'short':  # short
@@ -294,12 +302,22 @@ class TurtleTrader:
             return
 
     def get_atr_for_pyramid(self):
-        # lower atr for entry to half for pyramid trade
-        # if atr/price ration is lower than 2% (less volatile market)
-        atr_ratio = self.last_opened_position.get_atr_price_ratio()
-        if atr_ratio < self.strategy_settings.aggressive_price_atr_ratio:
-            return self.last_opened_position.atr * self.strategy_settings.aggressive_pyramid_entry_multipl
-        return self.last_opened_position.atr * self.strategy_settings.pyramid_entry_atr_multipl
+        # # lower atr for entry to half for pyramid trade
+        # # if atr/price ration is lower than 2% (less volatile market)
+        # atr_ratio = self.last_opened_position.get_atr_price_ratio()
+        # if atr_ratio < self.strategy_settings.aggressive_price_atr_ratio:
+        #     return (self.last_opened_position.atr *
+        #             self.strategy_settings.aggressive_pyramid_entry_multipl *
+        #             self.curr_market_conditions.atr_period_ratio)
+        pyramid_atr = (
+                self.last_opened_position.atr *
+                self.strategy_settings.pyramid_entry_atr_multipl *
+                self.last_opened_position.atr_period_ratio  # can be current or last atr ratio
+        )
+
+        long_pyramid_price = self.last_opened_position.price + pyramid_atr
+        short_pyramid_price = self.last_opened_position.price - pyramid_atr
+        return long_pyramid_price, short_pyramid_price
 
     def recalc_limited_free_entry_balance(self, free_balance, total_balance):
         if self.last_opened_position:
@@ -356,15 +374,16 @@ class TurtleTrader:
 
         self._exchange.fetch_balance()
 
-        order_object = OrderSchema().load(order)
+        order_object: OrderSchema = OrderSchema().load(order)
         order_object.atr = self.curr_market_conditions.ATR
+        order_object.atr_period_ratio = self.curr_market_conditions.atr_period_ratio
         order_object.action = action
         order_object.free_balance = self._exchange.free_balance
         order_object.total_balance = self._exchange.total_balance
         order_object.position_status = position_status
         order_object.agg_trade_id = self.create_agg_trade_id()
-        atr2 = self.strategy_settings.stop_loss_atr_multipl * order_object.atr
-        order_object.stop_loss_price = self.get_stop_loss_price(action, atr2)
+
+        order_object.stop_loss_price = self.get_stop_loss_price(action, order_object.atr)
 
         order_object.exchange = self._exchange.exchange_id
         order_object.contract_size = self._exchange.contract_size
@@ -389,7 +408,11 @@ class TurtleTrader:
         free_balance = self.recalc_limited_free_entry_balance(free_balance, total_balance)
 
         trade_risk_cap = free_balance * TRADE_RISK_ALLOCATION
-        amount = trade_risk_cap / (self.strategy_settings.stop_loss_atr_multipl * self.curr_market_conditions.ATR)
+        amount = (trade_risk_cap /
+                  (self.strategy_settings.stop_loss_atr_multipl *
+                   self.curr_market_conditions.ATR *
+                   self.curr_market_conditions.atr_period_ratio)
+                  )
         _logger.info(f"Amount before rounding: {amount}")
         amount = get_adjusted_amount(amount, self._exchange.amount_precision)
         _logger.info(f"Amount after precision rounding: {amount}")
@@ -438,11 +461,7 @@ class TurtleTrader:
 
         curr_mar_cond = self.curr_market_conditions
         last_stop_loss = self.last_opened_position.stop_loss_price
-
-        # set trigger price for pyramid trade
-        pyramid_atr = self.get_atr_for_pyramid()
-        long_pyramid_price = self.last_opened_position.price + pyramid_atr
-        short_pyramid_price = self.last_opened_position.price - pyramid_atr
+        long_pyramid_price, short_pyramid_price = self.get_atr_for_pyramid()
 
         # check if number of pyramid trade is over limit
         pyramid_stop = self.n_of_opened_positions > self.strategy_settings.pyramid_entry_limit
