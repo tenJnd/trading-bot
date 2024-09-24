@@ -83,6 +83,7 @@ class StrategySettings(TurtleBase):
     timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     active = Column(Boolean, default=False)
+    agent_id = Column(String)
 
     # Relationship to Order
     orders = relationship("Order", back_populates="strategy")
