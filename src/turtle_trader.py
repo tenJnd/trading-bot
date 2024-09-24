@@ -232,7 +232,7 @@ class TurtleTrader:
             asset_pl = session.query(
                 func.sum(Order.pl).label('filtered_total_pl')
             ).filter(
-                Order.symbol == self._exchange.market_futures
+                Order.strategy_id == self.strategy_settings.id
             ).scalar()
 
             # Query for the sum of P&L for all positions
@@ -248,14 +248,13 @@ class TurtleTrader:
 
     def log_total_pl(self):
         asset_pl, total_pl = self.get_pl()
-        _logger.info(f'\n==={self._exchange.market}===\n'
-                     f'P/L = {asset_pl}\n'
-                     f'Total P/L = {total_pl}\n'
-                     f'Total balance: {self._exchange.total_balance}')
-        _notifier.info(f'\n==={self._exchange.market}===\n'
-                       f'P/L = {asset_pl}\n'
-                       f'Total P/L = {total_pl}\n'
-                       f'Total balance: {self._exchange.total_balance}')
+        msg = (f'\n==={self._exchange.market}===\n'
+               f'strategy id: {self.strategy_settings.id}\n'
+               f'P/L = {asset_pl}\n'
+               f'Total P/L = {total_pl}\n'
+               f'Total balance: {self._exchange.total_balance}')
+        _logger.info(msg)
+        _notifier.info(msg)
 
     def calculate_pl(self, close_order: OrderSchema):
         if self.last_opened_position.is_long():
