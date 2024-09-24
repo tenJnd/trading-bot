@@ -183,12 +183,23 @@ class BaseExchangeAdapter:
             f"\n{self._open_position}"
         )
 
+    def _set_levarage(self, leverage):
+        try:
+            _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
+            self._exchange.set_leverage(leverage, self.market_futures)
+        except Exception as exc:
+            _logger.info(f"Leverage set up not supported on this exchange! {traceback.format_exc()}")
+
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def enter_position(self, side, amount):
+    def enter_position(self, side, amount, limit_price=None):
         _logger.info(f"entering {str.upper(side)} position")
         leverage = self.params.get('leverage', 1)
+
+        order_type = 'market'
+        if limit_price:
+            order_type = 'limit'
 
         try:
             # self.opened_position()
@@ -197,21 +208,20 @@ class BaseExchangeAdapter:
             # if self.open_position_side:
             #     _logger.info(f"There is already one open position")
             #     self.close_position()
-            try:
-                _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
-                self._exchange.set_leverage(leverage, self.market_futures)
-            except Exception as exc:
-                _logger.info(f"Leverage set up not supported on this exchange! {traceback.format_exc()}")
+            self._set_levarage(leverage)
 
             _logger.info(f"creating order: {side}, "
+                         f"order_type: {order_type}, "
                          f"amount: {amount}, "
+                         f"limit_price: {limit_price}, "
                          f"params: {self.params}")
             order = self._exchange.create_order(
                 symbol=self.market_futures,
-                type='market',
+                type=order_type,
                 side=side,
                 amount=amount,
-                params=self.params
+                params=self.params,
+                price=limit_price
             )
 
             _logger.info(f"{str.upper(side)} {self.market} | amount: {amount}")
@@ -277,7 +287,7 @@ class BaseExchangeAdapter:
             _logger.error(msg)
             raise
 
-    def order(self, action_key, amount: float = 0):
+    def order(self, action_key, amount: float = 0, limit_price: float = None):
         _actions = {
             'long': {'action': self.enter_position, 'side': 'buy'},
             'short': {'action': self.enter_position, 'side': 'sell'},
@@ -289,7 +299,7 @@ class BaseExchangeAdapter:
         side = position.get('side', None)
 
         if side:
-            return position_order(side, amount)
+            return position_order(side, amount, limit_price)
         return position_order(amount)
 
 
