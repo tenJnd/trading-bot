@@ -90,7 +90,7 @@ class StrategySettingsModel:
         )
 
 
-def load_strategy_settings(exchange_id) -> List[StrategySettingsModel]:
+def load_strategy_settings(exchange_id, agent_id: str = 'turtle_trader') -> List[StrategySettingsModel]:
     with trader_database.session_manager() as session:
         # Querying only the necessary columns
         settings = session.query(
@@ -103,10 +103,11 @@ def load_strategy_settings(exchange_id) -> List[StrategySettingsModel]:
             StrategySettings.pyramid_entry_atr_multipl,
             StrategySettings.aggressive_pyramid_entry_multipl,
             StrategySettings.aggressive_price_atr_ratio,
-            StrategySettings.pyramid_entry_limit
+            StrategySettings.pyramid_entry_limit,
         ).filter(
             StrategySettings.exchange_id == exchange_id,
-            StrategySettings.active == True
+            StrategySettings.active == True,
+            StrategySettings.agent_id == agent_id
         ).order_by(
             StrategySettings.timestamp_created
         ).all()
