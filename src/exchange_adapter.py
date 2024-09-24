@@ -183,7 +183,10 @@ class BaseExchangeAdapter:
             f"\n{self._open_position}"
         )
 
-    def _set_levarage(self, leverage):
+    def cancel_order(self, order_id: str):
+        return self._exchange.cancel_order(order_id)
+
+    def _set_leverage(self, leverage):
         try:
             _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
             self._exchange.set_leverage(leverage, self.market_futures)
@@ -208,7 +211,7 @@ class BaseExchangeAdapter:
             # if self.open_position_side:
             #     _logger.info(f"There is already one open position")
             #     self.close_position()
-            self._set_levarage(leverage)
+            self._set_leverage(leverage)
 
             _logger.info(f"creating order: {side}, "
                          f"order_type: {order_type}, "
