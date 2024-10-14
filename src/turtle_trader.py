@@ -22,7 +22,7 @@ from model.turtle_model import StrategySettings
 from src.model import trader_database
 from src.model.turtle_model import Order
 from src.schemas.turtle_schema import OrderSchema
-from src.utils.utils import save_json_to_file, get_adjusted_amount
+from src.utils.utils import save_json_to_file, get_adjusted_amount, calculate_atr
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(SLACK_URL, __name__, __name__)
@@ -70,55 +70,26 @@ class CurrMarketConditions:
     C: float
     V: float
     datetime: str
-    ATR: float
-    atr_long_period: float
-    d20_High: float
-    d20_Low: float
-    d10_High: float
-    d10_Low: float
-    Long_Entry: bool
-    Short_Entry: bool
-    Long_Exit: bool
-    Short_Exit: bool
+    atr_20: float
+    atr_50: float
+    high_20: float
+    low_20: float
+    high_10: float
+    low_10: float
+    long_entry: bool
+    short_entry: bool
+    long_exit: bool
+    short_exit: bool
 
     def log_current_market_conditions(self):
-        _logger.info(f'\nLONG ENTRY cond: {self.Long_Entry}\n'
-                     f'LONG EXIT cond: {self.Long_Exit}\n'
-                     f'SHORT ENTRY cond: {self.Short_Entry}\n'
-                     f'SHORT EXIT cond: {self.Short_Exit}')
+        _logger.info(f'\nLONG ENTRY cond: {self.long_entry}\n'
+                     f'LONG EXIT cond: {self.long_exit}\n'
+                     f'SHORT ENTRY cond: {self.short_entry}\n'
+                     f'SHORT EXIT cond: {self.short_exit}')
 
     @property
     def atr_period_ratio(self):
-        return self.ATR / self.atr_long_period
-
-
-def calculate_atr(df, period=ATR_PERIOD, long_period=50):
-    """
-    Calculate the Average True Range (ATR) for given OHLCV DataFrame.
-
-    Parameters:
-    - df: pandas DataFrame with columns 'H', 'L', and 'C'.
-    - period: the period over which to calculate the ATR.
-
-    Returns:
-    - A pandas Series representing the ATR.
-    """
-    # Calculate true ranges
-    df['High-Low'] = df['H'] - df['L']
-    df['High-PrevClose'] = abs(df['H'] - df['C'].shift(1))
-    df['Low-PrevClose'] = abs(df['L'] - df['C'].shift(1))
-
-    # Find the max of the true ranges
-    df['TrueRange'] = df[['High-Low', 'High-PrevClose', 'Low-PrevClose']].max(axis=1)
-
-    # Calculate the ATR
-    df['ATR'] = df['TrueRange'].rolling(window=period, min_periods=1).mean()
-    df['atr_long_period'] = df['TrueRange'].rolling(window=long_period, min_periods=1).mean()
-
-    # Clean up the DataFrame by removing the intermediate columns
-    df.drop(['High-Low', 'High-PrevClose', 'Low-PrevClose', 'TrueRange'], axis=1, inplace=True)
-
-    return df
+        return self.atr_20 / self.atr_50
 
 
 def turtle_trading_signals_adjusted(df):
@@ -129,29 +100,29 @@ def turtle_trading_signals_adjusted(df):
     - df: pandas DataFrame with at least 'High' and 'Low' columns.
 
     Adds columns to df:
-    - 'd20_High': Highest high over the previous 20 days, adjusting for early rows.
-    - 'd20_Low': Lowest low over the previous 20 days, adjusting for early rows.
-    - 'd10_High': Highest high over the previous 10 days, adjusting for early rows.
-    - 'd10_Low': Lowest low over the previous 10 days, adjusting for early rows.
-    - 'Long_Entry': Signal for entering a long position.
-    - 'Long_Exit': Signal for exiting a long position.
-    - 'Short_Entry': Signal for entering a short position.
-    - 'Short_Exit': Signal for exiting a short position.
+    - 'high_20': Highest high over the previous 20 days, adjusting for early rows.
+    - 'low_20': Lowest low over the previous 20 days, adjusting for early rows.
+    - 'high_10': Highest high over the previous 10 days, adjusting for early rows.
+    - 'low_10': Lowest low over the previous 10 days, adjusting for early rows.
+    - 'long_entry': Signal for entering a long position.
+    - 'long_exit': Signal for exiting a long position.
+    - 'short_entry': Signal for entering a short position.
+    - 'short_exit': Signal for exiting a short position.
     """
     df['datetime'] = pd.to_datetime(df['timeframe'], unit='ms')
     # Calculate rolling max/min for the required windows with min_periods=1
-    df['d20_High'] = df['H'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).max()
-    df['d20_Low'] = df['L'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).min()
-    df['d10_High'] = df['H'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).max()
-    df['d10_Low'] = df['L'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).min()
+    df['high_20'] = df['H'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).max()
+    df['low_20'] = df['L'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).min()
+    df['high_10'] = df['H'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).max()
+    df['low_10'] = df['L'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).min()
 
     # Entry signals
-    df['Long_Entry'] = df['H'] > df['d20_High'].shift(1)
-    df['Short_Entry'] = df['L'] < df['d20_Low'].shift(1)
+    df['long_entry'] = df['H'] > df['high_20'].shift(1)
+    df['short_entry'] = df['L'] < df['low_20'].shift(1)
 
     # Exit signals
-    df['Long_Exit'] = df['L'] < df['d10_Low'].shift(1)
-    df['Short_Exit'] = df['H'] > df['d10_High'].shift(1)
+    df['long_exit'] = df['L'] < df['low_10'].shift(1)
+    df['short_exit'] = df['H'] > df['high_10'].shift(1)
 
     return df
 
@@ -284,6 +255,7 @@ class TurtleTrader:
         curr_market_con = ohlc.iloc[-1].to_dict()
         self.curr_market_conditions = CurrMarketConditions(**curr_market_con)
         self.curr_market_conditions.log_current_market_conditions()
+        return ohlc
 
     def create_agg_trade_id(self):
         if self.last_opened_position is None:
@@ -374,7 +346,7 @@ class TurtleTrader:
         self._exchange.fetch_balance()
 
         order_object: OrderSchema = OrderSchema().load(order)
-        order_object.atr = self.curr_market_conditions.ATR
+        order_object.atr = self.curr_market_conditions.atr_20
         order_object.atr_period_ratio = self.curr_market_conditions.atr_period_ratio
         order_object.action = action
         order_object.free_balance = self._exchange.free_balance
@@ -409,7 +381,7 @@ class TurtleTrader:
         trade_risk_cap = free_balance * TRADE_RISK_ALLOCATION
         amount = (trade_risk_cap /
                   (self.strategy_settings.stop_loss_atr_multipl *
-                   self.curr_market_conditions.ATR *
+                   self.curr_market_conditions.atr_20 *
                    self.curr_market_conditions.atr_period_ratio)
                   )
         _logger.info(f"Amount before rounding: {amount}")
@@ -467,7 +439,7 @@ class TurtleTrader:
 
         if self.last_opened_position.is_long():
             # exit position
-            if curr_mar_cond.Long_Exit:
+            if curr_mar_cond.long_exit:
                 _logger.info('Exiting long position/s')
                 self.exit_position()
             # add to position -> pyramiding
@@ -483,7 +455,7 @@ class TurtleTrader:
                              '-> no condition for opened position is met')
         else:
             # exit position
-            if curr_mar_cond.Short_Exit:
+            if curr_mar_cond.short_exit:
                 _logger.info('Exiting short position/s')
                 self.exit_position()
             # add to position -> pyramiding
@@ -502,11 +474,11 @@ class TurtleTrader:
         if self.opened_positions is None:
             curr_cond = self.curr_market_conditions
             # entry long
-            if curr_cond.Long_Entry and not curr_cond.Long_Exit:  # safety
+            if curr_cond.long_entry and not curr_cond.long_exit:  # safety
                 _logger.info('Long cond is met -> entering long position')
                 self.entry_position('long')
             # entry short
-            elif curr_cond.Short_Entry and not curr_cond.Short_Exit:  # safety
+            elif curr_cond.short_entry and not curr_cond.short_exit:  # safety
                 _logger.info('Short cond is met -> entering short position')
                 self.entry_position('short')
             # do nothing

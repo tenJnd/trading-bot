@@ -1,0 +1,15 @@
+version: "3"
+services:
+  llm-bot-bybit:
+    container_name: trading-bot-binance
+    image: tenjnd/trading-bot:latest
+    env_file:
+      - .env
+    network_mode: "host"
+    volumes:
+      - trading-data-volume:/app/trading_data
+    entrypoint: ["python"]
+    command: ["src/main.py", "llm_trade", "-exch", "bybit"]
+
+volumes:
+  trading-data-volume:

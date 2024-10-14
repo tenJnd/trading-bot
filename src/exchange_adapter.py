@@ -1,5 +1,6 @@
 import logging
 import traceback
+from datetime import datetime
 
 import ccxt
 import pandas as pd
@@ -27,7 +28,7 @@ def retry_if_network_error(exception):
 
 
 class BaseExchangeAdapter:
-    params = {'leverage': LEVERAGE}
+    global_params = {'leverage': LEVERAGE}
 
     def __init__(self, exchange_id: str, market: str = None):
         self.exchange_id = exchange_id
@@ -41,6 +42,7 @@ class BaseExchangeAdapter:
 
         self.markets = None
         self._open_position = None
+        self._open_orders = None
         self.balance = None
 
     def load_exchange(self, force_refresh=True):
@@ -109,11 +111,97 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def fetch_ohlc(self, since, timeframe: str = '1d'):
-        candles = self._exchange.fetchOHLCV(self.market_futures, timeframe=timeframe, since=since)
-        candles_df = pd.DataFrame(candles, columns=['timeframe', 'O', 'H', 'L', 'C', 'V'])
-        candles_df['datetime'] = pd.to_datetime(candles_df['timeframe'], unit='ms')
+    def fetch_ohlc(self, since, timeframe: str = '4h', limit=500, buffer_days=100):
+        all_candles = []  # Store all fetched candles here
+        candles_df = pd.DataFrame()
+
+        # Convert buffer_days to the timestamp corresponding to that number of days ago
+        end_time = datetime.now().timestamp() * 1000  # Current timestamp in milliseconds
+
+        while since < end_time:
+            # Fetch candles from the exchange with a limit on the number of records
+            candles = self._exchange.fetchOHLCV(self.market_futures, timeframe=timeframe, since=since, limit=limit)
+
+            # If no more candles are returned, break the loop
+            if not candles:
+                break
+
+            # Append the fetched candles to the list
+            all_candles.extend(candles)
+
+            # Update 'since' to the timestamp of the last candle to fetch the next batch
+            since = candles[-1][0] + 1  # Increment to avoid overlapping with the last candle
+
+            # Check if the newly fetched data brings us to the present (end_time)
+            if candles[-1][0] >= end_time:
+                break
+
+        # Convert the list of candles to a DataFrame
+        if all_candles:
+            candles_df = pd.DataFrame(all_candles, columns=['timeframe', 'O', 'H', 'L', 'C', 'V'])
+            candles_df['datetime'] = pd.to_datetime(candles_df['timeframe'], unit='ms')
+
         return candles_df
+
+    @retry(retry_on_exception=retry_if_network_error,
+           stop_max_attempt_number=5,
+           wait_exponential_multiplier=1500)
+    def get_open_interest_hist(self, timeframe: str = '4h', since: datetime.timestamp = None):
+        try:
+            # Check if the exchange supports the fetch_open_interest method
+            if hasattr(self._exchange, 'fetch_open_interest_history'):
+                # Fetch open interest for the specified market symbol
+                open_interest_data = self._exchange.fetch_open_interest_history(
+                    self.market_futures, timeframe=timeframe, since=since
+                )
+                return open_interest_data
+            else:
+                raise ccxt.NotSupported(f"{self._exchange.id} does not support fetching open interest.")
+
+        except ccxt.NotSupported as e:
+            # Handle the NotSupported error if the method is not supported by the exchange
+            _logger.error(f"Error: open interest not supported: {e}")
+            return None
+
+        except Exception as e:
+            # Handle any other exceptions that may occur
+            _logger.warning(f"An unexpected error occurred: {e}")
+            return None
+
+    def get_funding_rate_history(self):
+        try:
+            funding_rate_history = self._exchange.fetch_funding_rate_history(symbol=self.market_futures)
+            if funding_rate_history:
+                _logger.info(
+                    f"Fetched {len(funding_rate_history)} funding rate history records for {self.market_futures}")
+                return funding_rate_history
+            else:
+                _logger.info(f"No funding rate history found for {self.market_futures}")
+                return None
+        except Exception as e:
+            _logger.error(f"Error fetching funding rate history: {str(e)}")
+            return None
+
+    @staticmethod
+    def aggregate_funding_rates(funding_rate_history, period='4H'):
+        # Convert funding rate history into a pandas DataFrame
+        df = pd.DataFrame(funding_rate_history)
+
+        # Convert the timestamp into a datetime object
+        df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+
+        # Extract only the relevant numerical columns (e.g., 'fundingRate')
+        if 'fundingRate' in df.columns:
+            # Set 'datetime' as the index, resample by the desired period, and calculate the mean funding rate
+            df_resampled = df[['datetime', 'fundingRate']].set_index('datetime').resample(period).mean()
+
+            # Reset the index to bring 'datetime' back as a column
+            df_resampled = df_resampled.reset_index()
+
+            return df_resampled
+        else:
+            print("Funding rate data does not have the expected 'fundingRate' column.")
+            return None
 
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
@@ -145,7 +233,7 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def opened_position(self):
+    def get_opened_position(self):
         _logger.info(f"getting open positions")
 
         if self.exchange_id == 'binance':
@@ -160,6 +248,106 @@ class BaseExchangeAdapter:
         if open_positions:
             open_position = open_positions[0]
             self._open_position = open_position
+
+        return open_positions
+
+    @retry(retry_on_exception=retry_if_network_error,
+           stop_max_attempt_number=5,
+           wait_exponential_multiplier=1500)
+    def get_opened_orders(self):
+        """Fetches open (unfilled) orders for the specified market."""
+        _logger.info(f"Fetching open orders for {self.market_futures}")
+
+        open_orders = self._exchange.fetch_open_orders(symbol=self.market_futures)
+
+        if open_orders:
+            self._open_orders = open_orders
+            _logger.info(f"Found {len(open_orders)} open orders.")
+        else:
+            self._open_orders = None
+            _logger.info(f"No open orders found.")
+
+        return open_orders
+
+    @retry(retry_on_exception=retry_if_network_error,
+           stop_max_attempt_number=5,
+           wait_exponential_multiplier=1500)
+    def get_trade_history(self):
+        """Fetches trade history (executed trades) for the specified market."""
+        _logger.info(f"Fetching trade history for {self.market_futures}")
+
+        trade_history = self._exchange.fetch_my_trades(symbol=self.market_futures)
+
+        if trade_history:
+            self._trade_history = trade_history
+            _logger.info(f"Found {len(trade_history)} trades.")
+        else:
+            self._trade_history = None
+            _logger.info("No trades found.")
+
+        return trade_history
+
+    @staticmethod
+    def process_last_trade_with_sl_tp(trade_history):
+        """
+        Processes the last trade in the trade history and determines if it closed a position.
+        Uses 'stopOrderType' and 'createType' to identify if a stop-loss or take-profit was hit.
+
+        Args:
+            trade_history (list): A list of trades from the exchange.
+
+        Returns:
+            dict: Last closed trade information in the required format.
+        """
+
+        if not trade_history:
+            return {"last_closed_trade": None}
+
+        last_closed_trade = {}
+        total_buy = 0.0  # Total buy amount
+        total_sell = 0.0  # Total sell amount
+
+        for trade in trade_history:
+            side = trade['side']  # 'buy' or 'sell'
+            amount = float(trade['amount'])  # Amount of the trade
+            price = float(trade['price'])  # Trade price
+            timestamp = trade['timestamp']
+            stop_order_type = trade['info'].get('stopOrderType')  # Check stop order type if exists
+            create_type = trade['info'].get(
+                'createType')  # Check create type (e.g., CreateByStopLoss, CreateByTakeProfit)
+
+            # Accumulate buy and sell amounts
+            if side == 'buy':
+                total_buy += amount
+            elif side == 'sell':
+                total_sell += amount
+
+            # If the trade was triggered by a stop-loss or take-profit, mark it as such
+            hit_stop_loss = create_type == 'CreateByStopLoss' or stop_order_type == 'StopLoss'
+            hit_take_profit = create_type == 'CreateByTakeProfit' or stop_order_type == 'TakeProfit'
+
+            # If total buy equals total sell, the position is closed
+            if total_buy == total_sell:
+                # Calculate profit or loss based on the entry price (first trade)
+                entry_price = trade_history[0]['price']
+                profit_or_loss = (price - entry_price) * total_sell if side == 'sell' else (
+                                                                                                       entry_price - price) * total_buy
+                outcome = 'profit' if profit_or_loss > 0 else 'loss'
+
+                # Construct the last closed trade dictionary
+                last_closed_trade = {
+                    "action": "close",
+                    "amount": total_sell if side == 'sell' else total_buy,
+                    "timestamp": timestamp,
+                    "hit_stop_loss": hit_stop_loss,
+                    "hit_take_profit": hit_take_profit,
+                    "outcome": outcome,
+                    "price": price,
+                    "profit_or_loss": round(profit_or_loss, 2),
+                    "side": side
+                }
+
+        return last_closed_trade if last_closed_trade else None
 
     @property
     def open_position_amount(self):
@@ -199,9 +387,16 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def enter_position(self, side, amount, limit_price=None):
+    def enter_position(self, side, amount, limit_price=None, stop_loss=None, take_profit=None):
         _logger.info(f"entering {str.upper(side)} position")
-        leverage = self.params.get('leverage', 1)
+        leverage = self.global_params.get('leverage', 1)
+
+        params = self.global_params
+        # Set stop-loss and take-profit if provided
+        if stop_loss:
+            params['stopLoss'] = {'triggerPrice': stop_loss}
+        if take_profit:
+            params['takeProfit'] = {'triggerPrice': take_profit}
 
         order_type = 'market'
         if limit_price:
@@ -220,13 +415,13 @@ class BaseExchangeAdapter:
                          f"order_type: {order_type}, "
                          f"amount: {amount}, "
                          f"limit_price: {limit_price}, "
-                         f"params: {self.params}")
+                         f"params: {self.global_params}")
             order = self._exchange.create_order(
                 symbol=self.market_futures,
                 type=order_type,
                 side=side,
                 amount=amount,
-                params=self.params,
+                params=params,
                 price=limit_price
             )
 
@@ -258,7 +453,7 @@ class BaseExchangeAdapter:
 
         params = {'reduceOnly': True}
         try:
-            self.opened_position()
+            self.get_opened_position()
 
             if not self.open_position_side:
                 _logger.warning(f"no open position to close: {self.open_position_side}")
@@ -293,7 +488,13 @@ class BaseExchangeAdapter:
             _logger.error(msg)
             raise
 
-    def order(self, action_key, amount: float = 0, limit_price: float = None):
+    def order(self,
+              action_key,
+              amount: float = 0,
+              limit_price: float = None,
+              stop_loss: float = None,
+              take_profit: float = None):
+
         _actions = {
             'long': {'action': self.enter_position, 'side': 'buy'},
             'short': {'action': self.enter_position, 'side': 'sell'},
@@ -305,40 +506,40 @@ class BaseExchangeAdapter:
         side = position.get('side', None)
 
         if side:
-            return position_order(side, amount, limit_price)
+            return position_order(side, amount, limit_price, stop_loss, take_profit)
         return position_order(amount)
 
 
-class MexcExchange(BaseExchangeAdapter):
-    def enter_position(self, side, amount):
-        leverage = self.params.get('leverage', 1)
-        position_type = 1 if side == 'buy' else 2
-        open_type = 1  # Isolated margin
-
-        _logger.info(f"Setting leverage for MEXC: leverage={leverage}, "
-                     f"openType={open_type}, positionType={position_type}")
-        self._exchange.set_leverage(
-            leverage,
-            self.market_futures,
-            {'openType': open_type, 'positionType': position_type}
-        )
-
-        params = {
-            'vol': amount,
-            'leverage': leverage,
-            'side': position_type,
-            'type': 5,
-            'openType': open_type,
-            'positionMode': 1
-        }
-
-        order = self._exchange.create_order(
-            symbol=self.market_futures,
-            type='market',
-            side=side,
-            amount=amount,
-            params=params
-        )
-
-        _logger.info(f"Order created on MEXC: {order}")
-        return order
+# class MexcExchange(BaseExchangeAdapter):
+#     def enter_position(self, side, amount):
+#         leverage = self.global_params.get('leverage', 1)
+#         position_type = 1 if side == 'buy' else 2
+#         open_type = 1  # Isolated margin
+#
+#         _logger.info(f"Setting leverage for MEXC: leverage={leverage}, "
+#                      f"openType={open_type}, positionType={position_type}")
+#         self._exchange.set_leverage(
+#             leverage,
+#             self.market_futures,
+#             {'openType': open_type, 'positionType': position_type}
+#         )
+#
+#         params = {
+#             'vol': amount,
+#             'leverage': leverage,
+#             'side': position_type,
+#             'type': 5,
+#             'openType': open_type,
+#             'positionMode': 1
+#         }
+#
+#         order = self._exchange.create_order(
+#             symbol=self.market_futures,
+#             type='market',
+#             side=side,
+#             amount=amount,
+#             params=params
+#         )
+#
+#         _logger.info(f"Order created on MEXC: {order}")
+#         return order

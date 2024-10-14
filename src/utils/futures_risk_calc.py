@@ -87,15 +87,15 @@ def calculate_risk_percent_based_on_stop_loss(position, capital, asset_price, st
 
 
 if __name__ == '__main__':
-    position = 'short'
-    asset_price = 56400
-    capital = 980
-    leverage = 2
-    risk_percent = 0.02
+    position = 'long'
+    asset_price = 400.5
+    capital = 2770
+    leverage = 1
+    risk_percent = 0.01
 
     # function specific
-    move = 5000
-    stop_loss = 57000
+    move = 11.93*2
+    stop_loss = 362
 
     calculate_stop_loss_based_on_risk(position=position,
                                       capital=capital,

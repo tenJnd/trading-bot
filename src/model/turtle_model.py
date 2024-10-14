@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY, Integer, ForeignKey
+from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY, Integer, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy_utc import UtcDateTime
@@ -87,6 +87,21 @@ class StrategySettings(TurtleBase):
 
     # Relationship to Order
     orders = relationship("Order", back_populates="strategy")
+    agent_actions = relationship("AgentActions", back_populates="strategy")
+
+
+class AgentActions(TurtleBase):
+    __tablename__ = 'agent_actions'
+
+    id = Column(Integer, primary_key=True)
+    action = Column(String)
+    rationale = Column(Text)
+    agent_output = Column(JSON)
+    strategy_id = Column(Integer, ForeignKey('turtle_strategy.strategy_settings.id'), nullable=True)
+    timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    order = Column(JSON, nullable=True)
+
+    strategy = relationship("StrategySettings", back_populates="agent_actions")
 
 
 if __name__ == '__main__':
