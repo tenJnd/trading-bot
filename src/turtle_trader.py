@@ -429,6 +429,13 @@ class TurtleTrader:
         # if we want to buy 100 of doge on binance = 100 contracts
         # but on mexc = 1 contract
         amount = amount / self._exchange.contract_size
+        if amount < self._exchange.min_amount:
+            _logger.warning(f"Cost {cost} is lower than "
+                            f"min cost {self._exchange.min_cost} "
+                            f"or higher than free_balance {free_balance}"
+                            f"SKIPPING ticker")
+            amount = self._exchange.min_amount
+
         _logger.info(f"Amount: {amount}"
                      f"Contract size: {self._exchange.contract_size}"
                      f"Amount of contracts: {amount}")
