@@ -19,9 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install git+https://github.com/tenJnd/notifier.git@main
 RUN pip install git+https://github.com/tenJnd/utils.git@main
 RUN pip install git+https://github.com/tenJnd/database-tools.git@main
-
-
-
+RUN pip install --upgrade git+https://github.com/tenJnd/llm-adapters.git@main
 
 
 # app stage

@@ -4,12 +4,12 @@ import traceback
 
 import click
 from jnd_utils.log import init_logging
-from numpy.core.defchararray import upper
 from slack_bot.notifications import SlackNotifier
 
 from config import SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
+from src.llm_trader import LmmTrader
 from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
 
@@ -74,6 +74,33 @@ def trade(exchange_id):
             trader = TurtleTrader(exchange_adapter, strategy)
             _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
             trader.trade()
+
+    except Exception as e:
+        _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        sys.exit(1)
+
+
+@cli.command(help='run LLM trading bot')
+@click.option('-exch', '--exchange_id', type=str, default='binance')
+def llm_trade(exchange_id):
+    _logger.info("\n============== STARTING LLM TRADE SESSION ==============\n")
+    try:
+        strategy_settings = load_strategy_settings(exchange_id, 'llm_trader')
+        if not strategy_settings:
+            return _logger.info("No active strategy found, skipping")
+        # Using the factory to get the correct exchange adapter
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
+
+        _logger.info(f"Initialising LLM trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
+        exchange_adapter.load_exchange()
+
+        for strategy in strategy_settings:
+            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
+            exchange_adapter.market = f"{strategy.ticker}"
+            trader = LmmTrader(exchange_adapter, strategy)
+            trader.trade()
+            _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
 
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")

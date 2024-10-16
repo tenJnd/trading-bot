@@ -21,7 +21,6 @@ BYBIT_API_SECRET = os.environ.get('BYBIT_API_SECRET')
 
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
-
 # exchanges
 BINANCE_CONFIG_TEST = {
     'apiKey': BINANCE_API_KEY_TEST,
@@ -80,6 +79,7 @@ BYBIT_CONFIG_PROD = {
 }
 
 SLACK_URL = os.environ.get("SLACK_URL")
+LLM_TRADER_SLACK_URL = os.environ.get("LLM_TRADER_SLACK_URL")
 APP_SETTINGS = os.environ.get("APP_SETTINGS", "DevConfig")
 
 # turtle strategy

@@ -54,48 +54,123 @@ example_sell_order = {
 }
 
 open_positions_example = [{
-                              'info': {
-                                  'symbol': 'LTCUSDT',
-                                  'initialMargin': '162.24000000',
-                                  'maintMargin': '1.05456000',
-                                  'unrealizedProfit': '1.06000000',
-                                  'positionInitialMargin': '162.24000000',
-                                  'openOrderInitialMargin': '0',
-                                  'leverage': '1',
-                                  'isolated': False,
-                                  'entryPrice': '81.65',
-                                  'breakEvenPrice': '81.61734',
-                                  'maxNotional': '9.223372036854776E18',
-                                  'positionSide': 'BOTH',
-                                  'positionAmt': '-2.000',
-                                  'notional': '-162.24000000',
-                                  'isolatedWallet': '0',
-                                  'updateTime': '1713187258311',
-                                  'bidNotional': '0',
-                                  'askNotional': '0',
-                                  'crossMargin': '10986.09970914',
-                                  'crossWalletBalance': '10985.03970914'
-                              },
-                              'id': None,
-                              'symbol': 'LTC/USDT:USDT',
-                              'timestamp': 1713187258311,
-                              'datetime': '2024-04-15T13:20:58.311Z',
-                              'initialMargin': 162.24,
-                              'initialMarginPercentage': 1.0,
-                              'maintenanceMargin': 1.05456,
-                              'maintenanceMarginPercentage': 0.0065,
-                              'entryPrice': 81.65,
-                              'notional': 162.24,
-                              'leverage': 1.0,
-                              'unrealizedPnl': 1.06,
-                              'contracts': 2.0,
-                              'contractSize': 1.0,
-                              'marginRatio': 0.0001,
-                              'liquidationPrice': 5538.17,
-                              'markPrice': None,
-                              'collateral': 10986.09970914,
-                              'marginMode': 'cross',
-                              'side': 'short',
-                              'hedged': False,
-                              'percentage': 0.65
-                          }]
+    'info': {
+        'symbol': 'LTCUSDT',
+        'initialMargin': '162.24000000',
+        'maintMargin': '1.05456000',
+        'unrealizedProfit': '1.06000000',
+        'positionInitialMargin': '162.24000000',
+        'openOrderInitialMargin': '0',
+        'leverage': '1',
+        'isolated': False,
+        'entryPrice': '81.65',
+        'breakEvenPrice': '81.61734',
+        'maxNotional': '9.223372036854776E18',
+        'positionSide': 'BOTH',
+        'positionAmt': '-2.000',
+        'notional': '-162.24000000',
+        'isolatedWallet': '0',
+        'updateTime': '1713187258311',
+        'bidNotional': '0',
+        'askNotional': '0',
+        'crossMargin': '10986.09970914',
+        'crossWalletBalance': '10985.03970914'
+    },
+    'id': None,
+    'symbol': 'LTC/USDT:USDT',
+    'timestamp': 1713187258311,
+    'datetime': '2024-04-15T13:20:58.311Z',
+    'initialMargin': 162.24,
+    'initialMarginPercentage': 1.0,
+    'maintenanceMargin': 1.05456,
+    'maintenanceMarginPercentage': 0.0065,
+    'entryPrice': 81.65,
+    'notional': 162.24,
+    'leverage': 1.0,
+    'unrealizedPnl': 1.06,
+    'contracts': 2.0,
+    'contractSize': 1.0,
+    'marginRatio': 0.0001,
+    'liquidationPrice': 5538.17,
+    'markPrice': None,
+    'collateral': 10986.09970914,
+    'marginMode': 'cross',
+    'side': 'short',
+    'hedged': False,
+    'percentage': 0.65
+}]
+
+open_positions_empty = [{
+    'collateral': 0.0, 'contractSize': 1.0, 'contracts': 0.0,
+    'datetime': '2024-10-02T10:14:32.079Z', 'entryPrice': None, 'id': None,
+    'info': {
+        'adlRankIndicator': '0', 'autoAddMargin': '0', 'avgPrice': '0', 'bustPrice': '', 'createdTime': '1727864072079',
+        'cumRealisedPnl': '12.70083782', 'curRealisedPnl': '0', 'isReduceOnly': False, 'leverage': '5',
+        'leverageSysUpdatedTime': '', 'liqPrice': '', 'markPrice': '2.1457', 'mmrSysUpdatedTime': '',
+        'nextPageCursor': 'WIFUSDT,1727896093997,0', 'positionBalance': '0', 'positionIM': '0', 'positionIdx': '0',
+        'positionMM': '0', 'positionStatus': 'Normal', 'positionValue': '', 'riskId': '1', 'riskLimitValue': '25000',
+        'seq': '130538087532', 'sessionAvgPrice': '', 'side': '', 'size': '0', 'stopLoss': '', 'symbol': 'WIFUSDT',
+        'takeProfit': '', 'tpslMode': 'Full', 'tradeMode': '0', 'trailingStop': '0', 'unrealisedPnl': '',
+        'updatedTime': '1727896093997'
+    }, 'initialMargin': 0.0, 'initialMarginPercentage': None, 'lastPrice': None, 'lastUpdateTimestamp': 1727896093997,
+    'leverage': 5.0, 'liquidationPrice': None, 'maintenanceMargin': 0.0,
+    'maintenanceMarginPercentage': None, 'marginMode': None, 'marginRatio': None,
+    'markPrice': 2.1457, 'notional': None, 'percentage': None, 'realizedPnl': None,
+    'side': None, 'stopLossPrice': None, 'symbol': 'WIF/USDT:USDT', 'takeProfitPrice': None,
+    'timestamp': 1727864072079, 'unrealizedPnl': None
+}]
+
+opened_order_example = [{
+    'amount': 2.0, 'average': None, 'clientOrderId': None, 'cost': 0.0,
+    'datetime': '2024-10-02T18:17:10.258Z', 'fee': {'cost': '0', 'currency': 'USDT'},
+    'fees': [{'cost': 0.0, 'currency': 'USDT'}], 'filled': 0.0,
+    'id': '501464e5-9e2f-4ffc-bd7d-2a5c209144a4',
+    'info': {
+        'avgPrice': '', 'blockTradeId': '', 'cancelType': 'UNKNOWN', 'closeOnTrigger': False,
+        'createType': 'CreateByUser', 'createdTime': '1727893030258', 'cumExecFee': '0', 'cumExecQty': '0',
+        'cumExecValue': '0', 'isLeverage': '', 'lastPriceOnCreated': '25.455', 'leavesQty': '2', 'leavesValue': '45.4',
+        'marketUnit': '',
+        'nextPageCursor': '501464e5-9e2f-4ffc-bd7d-2a5c209144a4:1727893030258,501464e5-9e2f-4ffc-bd7d-2a5c209144a4:1727893030258',
+        'orderId': '501464e5-9e2f-4ffc-bd7d-2a5c209144a4', 'orderIv': '', 'orderLinkId': '', 'orderStatus': 'New',
+        'orderType': 'Limit', 'placeType': '', 'positionIdx': '0', 'price': '22.7', 'qty': '2', 'reduceOnly': False,
+        'rejectReason': 'EC_NoError', 'side': 'Buy', 'slLimitPrice': '0', 'slTriggerBy': '', 'smpGroup': '0',
+        'smpOrderId': '', 'smpType': 'None', 'stopLoss': '', 'stopOrderType': '', 'symbol': 'AVAXUSDT',
+        'takeProfit': '', 'timeInForce': 'GTC', 'tpLimitPrice': '0', 'tpTriggerBy': '', 'tpslMode': '', 'triggerBy': '',
+        'triggerDirection': '0', 'triggerPrice': '', 'updatedTime': '1727893030259'
+    }, 'lastTradeTimestamp': 1727893030259, 'lastUpdateTimestamp': 1727893030259, 'postOnly': False, 'price': 22.7,
+    'reduceOnly': False, 'remaining': 2.0, 'side': 'buy', 'status': 'open',
+    'stopLossPrice': None, 'stopPrice': None, 'symbol': 'AVAX/USDT:USDT',
+    'takeProfitPrice': None, 'timeInForce': 'GTC', 'timestamp': 1727893030258, 'trades': [],
+    'triggerPrice': None, 'type': 'limit'
+}]
+
+trade_history = [{
+    'amount': 50.0, 'cost': 119.0, 'datetime': '2024-10-02T10:16:51.617Z',
+    'fee': {'cost': 0.0238, 'currency': 'USDT', 'rate': 0.0002},
+    'fees': [{'cost': 0.0238, 'currency': 'USDT', 'rate': 0.0002}],
+    'id': '72fd0e97-9256-56db-bac7-5be58337ba23', 'info': {
+        'blockTradeId': '', 'closedSize': '0', 'createType': 'CreateByUser', 'execFee': '0.0238',
+        'execId': '72fd0e97-9256-56db-bac7-5be58337ba23', 'execPrice': '2.38', 'execQty': '50',
+        'execTime': '1727864211617', 'execType': 'Trade', 'execValue': '119', 'feeCurrency': '', 'feeRate': '0.0002',
+        'indexPrice': '', 'isMaker': True, 'leavesQty': '0', 'markIv': '', 'markPrice': '2.3743', 'marketUnit': '',
+        'orderId': '3f8dd670-6fac-4d28-886f-12a154edde3b', 'orderLinkId': '', 'orderPrice': '2.38', 'orderQty': '50',
+        'orderType': 'Limit', 'seq': '130415111541', 'side': 'Sell', 'stopOrderType': 'UNKNOWN', 'symbol': 'WIFUSDT',
+        'tradeIv': '', 'underlyingPrice': ''
+    }, 'order': '3f8dd670-6fac-4d28-886f-12a154edde3b', 'price': 2.38, 'side': 'sell', 'symbol': 'WIF/USDT:USDT',
+    'takerOrMaker': 'maker', 'timestamp': 1727864211617, 'type': 'limit'
+}, {
+    'amount': 50.0, 'cost': 106.225, 'datetime': '2024-10-02T19:08:13.995Z',
+    'fee': {'cost': 0.05842375, 'currency': 'USDT', 'rate': 0.00055},
+    'fees': [{'cost': 0.05842375, 'currency': 'USDT', 'rate': 0.00055}],
+    'id': '3cb8e8ec-3937-5ab7-ba3d-27c74b6a1752', 'info': {
+        'blockTradeId': '', 'closedSize': '50', 'createType': 'CreateByClosing', 'execFee': '0.05842375',
+        'execId': '3cb8e8ec-3937-5ab7-ba3d-27c74b6a1752', 'execPrice': '2.1245', 'execQty': '50',
+        'execTime': '1727896093995', 'execType': 'Trade', 'execValue': '106.225', 'feeCurrency': '',
+        'feeRate': '0.00055', 'indexPrice': '', 'isMaker': False, 'leavesQty': '0', 'markIv': '', 'markPrice': '2.1228',
+        'marketUnit': '', 'nextPageCursor': '1727896093995%3A10117125%2C1727864211617%3A10101232',
+        'orderId': '5e52b0e2-27b3-458e-9b8d-c51ebc216f79', 'orderLinkId': '', 'orderPrice': '2.2307', 'orderQty': '50',
+        'orderType': 'Market', 'seq': '130538087532', 'side': 'Buy', 'stopOrderType': 'UNKNOWN', 'symbol': 'WIFUSDT',
+        'tradeIv': '', 'underlyingPrice': ''
+    }, 'order': '5e52b0e2-27b3-458e-9b8d-c51ebc216f79', 'price': 2.1245, 'side': 'buy', 'symbol': 'WIF/USDT:USDT',
+    'takerOrMaker': 'taker', 'timestamp': 1727896093995, 'type': 'market'
+}]
