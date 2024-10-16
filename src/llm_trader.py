@@ -84,6 +84,7 @@ class LmmTrader:
         }
 
     def get_exchange_settings(self):
+        _logger.info("getting exchange settings...")
         free_balance = round(self._exchange.free_balance, 0)
         total_balance = round(self._exchange.total_balance, 0)
         max_amount = dynamic_safe_round(free_balance * 0.9 / self.last_close_price, 2)
@@ -263,10 +264,16 @@ class LmmTrader:
                                              f'max amount ({max_amount}, based on free capital)\n'
                                              f'exiting llm trader w/ a call')
 
+        _logger.info("No constrains, can call the agent...")
+
     def call_agent(self):
-        llm_client = LLMClientFactory.create_llm_client(model_config.Gpt4Config)
+        config = model_config.Gpt4Config
+        _logger.info(f"creating agent using llm factory, config: {config.MODEL}")
+        llm_client = LLMClientFactory.create_llm_client(config)
+        _logger.info(f"Calling the agent...")
         output = llm_client.call_agent(system_prompt=llm_trader_prompt, user_prompt=self.llm_input_data)
         parsed_output = llm_client.parse_json_output(output)
+        _logger.info(f"agent call success")
 
         return AgentAction(**parsed_output)
 
@@ -283,17 +290,21 @@ class LmmTrader:
                                          take_profit=agent_action.take_profit)
             msg = f"Agent entered position in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
             _logger.info(msg)
-            _notifier.info(msg)
+            _notifier.info(msg, echo='here')
 
-        if agent_action.action == 'close':
+        elif agent_action.action == 'close':
             order = self._exchange.order(agent_action.action, agent_action.amount)
             msg = f"Agent closed position in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
             _logger.info(msg)
-            _notifier.info(msg)
+            _notifier.info(msg, echo='here')
 
-        if agent_action.action == 'cancel':
+        elif agent_action.action == 'cancel':
             order = self._exchange.cancel_order(agent_action.order_id)
             msg = f"Agent canceled order in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
+            _logger.info(msg)
+            _notifier.info(msg, echo='here')
+        else:
+            msg = f"Agent holds in strategy {self.strategy_settings.id}:\n {asdict(agent_action)}"
             _logger.info(msg)
             _notifier.info(msg)
 
@@ -312,3 +323,5 @@ class LmmTrader:
                 order=order
             )
             session.add(action_object)
+
+        _logger.info("agent action saved")

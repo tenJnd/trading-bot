@@ -100,7 +100,6 @@ def llm_trade(exchange_id):
             exchange_adapter.market = f"{strategy.ticker}"
             trader = LmmTrader(exchange_adapter, strategy)
             trader.trade()
-            _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
 
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
