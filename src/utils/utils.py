@@ -2,11 +2,11 @@ import json
 import math
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import List
 
 import numpy as np
 import pandas as pd
-import requests
 
 from src.config import TRADING_DATA_DIR, ATR_PERIOD
 from src.model import trader_database
@@ -98,7 +98,7 @@ def dynamic_safe_round(value: float, precision: int = 2) -> float:
     leading_zeros = int(math.floor(abs(math.log10(abs_value))))  # Calculate leading zeros in the decimal part
 
     # Dynamic precision: higher for smaller values to preserve significant digits
-    dynamic_precision = leading_zeros + precision  # +2 ensures we don't over-truncate very small values
+    dynamic_precision = leading_zeros + precision
 
     return round(value, dynamic_precision)
 
@@ -161,6 +161,21 @@ def calculate_atr(df, period=14):
     return round_series(tr.rolling(window=period).mean())
 
 
+def calculate_obv(df):
+    """
+    Calculate the On-Balance Volume (OBV) indicator.
+
+    :param df: DataFrame containing OHLCV data with columns ['O', 'H', 'L', 'C', 'V']
+    :return: Series containing the OBV values
+    """
+    # Calculate price difference
+    price_change = df['C'].diff()
+    # Calculate OBV based on the price change
+    obv = np.where(price_change > 0, df['V'],
+                   np.where(price_change < 0, -df['V'], 0)).cumsum()
+    return pd.Series(obv, index=df.index)
+
+
 def calculate_bollinger_bands(df, period=20, column='C', num_std=2):
     """Bollinger Bands"""
     sma = df[column].rolling(window=period).mean()
@@ -188,7 +203,7 @@ def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
     :param lookback_periods: List of periods to calculate Fibonacci levels for
     :return: Dictionary in the format {lookback_period: {fib_0: value, fib_23.6: value, ...}}
     """
-    fib_dict = {}
+    fib_dict = []
 
     for period in lookback_periods:
         # Find the swing high and swing low over the lookback period
@@ -208,8 +223,8 @@ def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
         fib_values['swing_high'] = swing_high
         fib_values['swing_low'] = swing_low
 
-        # Store the values in the final dictionary for the given period
-        fib_dict[period] = fib_values
+        fib_values['fib_period'] = period
+        fib_dict.append(fib_values)
 
     return fib_dict
 
@@ -222,7 +237,7 @@ def calculate_pivot_points(df, lookback_periods=[5, 10]):
     :param lookback_periods: List of periods to calculate pivot points for
     :return: Dictionary in the format {lookback_period: {pivot: value, s1: value, r1: value, ...}}
     """
-    pivot_dict = {}
+    pivot_dict = []
 
     for period in lookback_periods:
         # Calculate the recent high, low, and close over the lookback period
@@ -239,6 +254,7 @@ def calculate_pivot_points(df, lookback_periods=[5, 10]):
 
         # Store the pivot points in a dictionary
         pivot_values = {
+            'pivot_points_period': period,
             'pivot': dynamic_safe_round(pivot),
             's1': dynamic_safe_round(s1),
             'r1': dynamic_safe_round(r1),
@@ -249,8 +265,7 @@ def calculate_pivot_points(df, lookback_periods=[5, 10]):
             'close': dynamic_safe_round(close)
         }
 
-        # Store the values in the final dictionary for the given period
-        pivot_dict[period] = pivot_values
+        pivot_dict.append(pivot_values)
 
     return pivot_dict
 
@@ -316,51 +331,56 @@ def calculate_adx(df, n_periods=14):
     return round_series(adx)
 
 
-def fetch_binance_open_interest(symbol, period='4h', limit=50, start_time=None, end_time=None):
+def format_large_number(num):
     """
-    Fetch historical open interest data from Binance Futures API.
+    Convert a large number into a shorter format (e.g., 1K, 1M, 1B).
 
-    :param symbol: The market symbol (e.g., 'BTCUSDT')
-    :param period: The time period (e.g., '5m', '15m', '1h', '4h', '1d')
-    :param limit: Number of records to fetch (max 500)
-    :param start_time: Optional start time in milliseconds (Unix timestamp)
-    :param end_time: Optional end time in milliseconds (Unix timestamp)
-    :return: JSON response containing open interest data or None if the request fails
+    :param num: The number to be formatted
+    :return: Formatted string representing the shortened version of the number
     """
-    url = "https://fapi.binance.com/futures/data/openInterestHist"
+    if abs(num) >= 1_000_000_000:
+        return f'{num / 1_000_000_000:.3f}B'
+    elif abs(num) >= 1_000_000:
+        return f'{num / 1_000_000:.2f}M'
+    elif abs(num) >= 1_000:
+        return f'{num / 1_000:.1f}K'
+    else:
+        return str(num)
 
-    # Define query parameters
-    params = {
-        'symbol': symbol,
-        'period': period,
-        'limit': limit
-    }
 
-    # Add optional start and end time if provided
-    if start_time:
-        params['startTime'] = start_time
-    if end_time:
-        params['endTime'] = end_time
+def shorten_large_numbers(df, column_name):
+    """
+    Apply the format_large_number function to a specific column of the DataFrame.
 
-    try:
-        # Make the GET request
-        response = requests.get(url, params=params)
-        response.raise_for_status()  # Raise an HTTPError for bad responses (4xx and 5xx)
+    :param df: The DataFrame containing the column to be formatted
+    :param column_name: The name of the column to be formatted
+    :return: DataFrame with the specified column formatted
+    """
+    # Apply the format_large_number function to the specified column
+    df[column_name] = df[column_name].apply(format_large_number)
 
-        # Return the parsed JSON response
-        return response.json()
+    return df
 
-    except requests.exceptions.HTTPError as http_err:
-        print(f"HTTP error occurred: {http_err} - Status code: {response.status_code}")
-    except requests.exceptions.ConnectionError as conn_err:
-        print(f"Connection error occurred: {conn_err}")
-    except requests.exceptions.Timeout as timeout_err:
-        print(f"Timeout error occurred: {timeout_err}")
-    except requests.exceptions.RequestException as req_err:
-        print(f"An error occurred: {req_err}")
 
-    # Return None in case of failure
-    return None
+def time_ago_string(timestamp_created: datetime) -> str:
+    now = datetime.now(timezone.utc)
+    time_diff = now - timestamp_created
+
+    # Convert time difference to seconds
+    seconds = time_diff.total_seconds()
+
+    # Determine the time difference and return the appropriate string
+    if seconds < 60:
+        return "just now"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+    else:
+        days = int(seconds // 86400)
+        return f"{days} day{'s' if days > 1 else ''} ago"
 
 
 @dataclass

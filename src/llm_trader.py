@@ -18,10 +18,15 @@ from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt
 from src.utils.utils import calculate_macd, calculate_rsi, \
     calculate_sma, calculate_bollinger_bands, calculate_stochastic_oscillator, round_series, \
-    calculate_auto_fibonacci, calculate_pivot_points, calculate_adx, calculate_atr
+    calculate_auto_fibonacci, calculate_pivot_points, calculate_adx, calculate_atr, calculate_obv, \
+    shorten_large_numbers, dynamic_safe_round
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
+
+
+class ConditionVerificationError(Exception):
+    """Problem with a verification before calling the agent"""
 
 
 @dataclass
@@ -48,36 +53,46 @@ class LmmTrader:
         self._exchange = exchange
         self._database = trader_database if not db else db
 
+        self.last_close_price = ...
         self.price_action_data = self.get_price_action_data()
         self.opened_positions = self.get_open_positions_data()
         self.opened_orders = self.get_open_orders_data()
         self.trade_history = self.get_trade_history_data()
-        self.capital = self.get_balance()
         self.last_agent_output = self.get_last_agent_output()
         self.exchange_settings = self.get_exchange_settings()
 
         self.llm_input_data = self.create_llm_input_dict()
 
-    def get_balance(self):
-        return {
-            'free': round(self._exchange.free_balance, 0),
-            'total': round(self._exchange.total_balance, 0)
-        }
-
     def get_last_agent_output(self):
         with self._database.session_manager() as session:
             last_agent_action = (
-                session.query(AgentActions.agent_output)
+                session.query(AgentActions.agent_output, AgentActions.timestamp_created)
                 .filter(AgentActions.strategy_id == self.strategy_settings.id)
                 .order_by(desc(AgentActions.timestamp_created))
                 .first()  # Get the most recent record
             )
-        return last_agent_action
+
+        # If there's no record, return None
+        if not last_agent_action:
+            return None
+
+        # Unpack the tuple and return as a dictionary
+        agent_output, timestamp_created = last_agent_action
+        return {
+            'agent_output': agent_output,  # JSON object
+            'timestamp': timestamp_created  # Timestamp
+        }
 
     def get_exchange_settings(self):
+        free_balance = round(self._exchange.free_balance, 0)
+        total_balance = round(self._exchange.total_balance, 0)
+        max_amount = dynamic_safe_round(free_balance * 0.9 / self.last_close_price, 2)
         return {
             'min_cost': self._exchange.min_cost,
-            'min_amount': self._exchange.min_amount
+            'min_amount': self._exchange.min_amount,
+            'free_capital': free_balance,
+            'total_capital': total_balance,
+            'max_amount_based_on_free_capital': max_amount
         }
 
     def preprocess_open_interest(self):
@@ -186,20 +201,26 @@ class LmmTrader:
         fr = self.preprocess_funding_rate()
         df = self.get_ohcl_data()
 
+        self.last_close_price = df.iloc[-1]['C']
+
         df.set_index('timeframe', inplace=True)
         df['sma_20'] = calculate_sma(df, period=20)
         df['sma_50'] = calculate_sma(df, period=50)
         df['sma_100'] = calculate_sma(df, period=100)
         df['sma_200'] = calculate_sma(df, period=200)
         df['rsi_14'] = calculate_rsi(df, period=14)
-        df['rsi_28'] = calculate_rsi(df, period=28)
-        df['macd'], df['macd_signal'] = calculate_macd(df)
-        df['bb_middle'], df['bb_upper'], df['bb_lower'] = calculate_bollinger_bands(df)
-        df['stochastic_k'], df['stochastic_d'] = calculate_stochastic_oscillator(df)
+        df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+        df['bb_middle_20'], df['bb_upper_20'], df['bb_lower_20'] = calculate_bollinger_bands(df)
+        df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
         df['adx_14'] = calculate_adx(df)
+        df['obv'] = round_series(calculate_obv(df), 0)
+        df['obv_sma_20'] = round_series(calculate_sma(df, period=20, column='obv'), 0)
 
-        fib_dict = calculate_auto_fibonacci(df, lookback_periods=[50])
-        pp_dict = calculate_pivot_points(df, lookback_periods=[20])
+        df = shorten_large_numbers(df, 'obv')
+        df = shorten_large_numbers(df, 'obv_sma_20')
+
+        fib_dict = calculate_auto_fibonacci(df, lookback_periods=[50, 100])
+        pp_dict = calculate_pivot_points(df, lookback_periods=[20, 50])
 
         merged_df = df.copy()
         if oi is not None:
@@ -222,8 +243,7 @@ class LmmTrader:
     def create_llm_input_dict(self):
         llm_input = {
             'symbol': self._exchange.market_futures,
-            'price_and_indicators': self.price_action_data,
-            'capital': self.capital,
+            'price_data': self.price_action_data,
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
             'last_closed_trade': self.trade_history,
@@ -233,15 +253,25 @@ class LmmTrader:
 
         return str(llm_input)
 
+    def check_constrains(self):
+        """ add all the 'before call conditions/constrains here """
+        max_amount = self.exchange_settings.get('max_amount_based_on_free_capital', 0)
+        min_amount = self.exchange_settings.get('min_amount', 0)
+
+        if min_amount > max_amount:
+            raise ConditionVerificationError(f'min amount ({min_amount}) > '
+                                             f'max amount ({max_amount}, based on free capital)\n'
+                                             f'exiting llm trader w/ a call')
+
     def call_agent(self):
-        input_dict = self.create_llm_input_dict()
         llm_client = LLMClientFactory.create_llm_client(model_config.Gpt4Config)
-        output = llm_client.call_agent(system_prompt=llm_trader_prompt, user_prompt=input_dict)
+        output = llm_client.call_agent(system_prompt=llm_trader_prompt, user_prompt=self.llm_input_data)
         parsed_output = llm_client.parse_json_output(output)
 
         return AgentAction(**parsed_output)
 
     def trade(self):
+        self.check_constrains()
         agent_action: AgentAction = self.call_agent()
 
         order = None
