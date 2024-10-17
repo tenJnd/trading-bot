@@ -6,7 +6,7 @@ import click
 from jnd_utils.log import init_logging
 from slack_bot.notifications import SlackNotifier
 
-from config import SLACK_URL
+from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
 from src.llm_trader import LmmTrader
@@ -14,7 +14,8 @@ from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
 
 _logger = logging.getLogger(__name__)
-_notifier = SlackNotifier(url=SLACK_URL, username='main')
+_notifier = SlackNotifier(url=SLACK_URL, username='turtle_trader')
+_notifier_llm = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='llm_trader')
 
 
 @click.group(chain=True)
@@ -103,7 +104,7 @@ def llm_trade(exchange_id):
 
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
-        _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        _notifier_llm.error(f"Trading error: {e}\n{traceback.format_exc()}")
         sys.exit(1)
 
 
