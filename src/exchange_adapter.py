@@ -44,6 +44,7 @@ class BaseExchangeAdapter:
         self._open_position = None
         self._open_orders = None
         self.balance = None
+        self._trade_history = None
 
     def load_exchange(self, force_refresh=True):
         if force_refresh or not self._exchange.markets:
@@ -111,7 +112,7 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def fetch_ohlc(self, since, timeframe: str = '4h', limit=500, buffer_days=100):
+    def fetch_ohlc(self, since, timeframe: str = '4h', limit=500):
         all_candles = []  # Store all fetched candles here
         candles_df = pd.DataFrame()
 
@@ -282,7 +283,6 @@ class BaseExchangeAdapter:
             self._trade_history = trade_history
             _logger.info(f"Found {len(trade_history)} trades.")
         else:
-            self._trade_history = None
             _logger.info("No trades found.")
 
         return trade_history
@@ -330,8 +330,8 @@ class BaseExchangeAdapter:
             if total_buy == total_sell:
                 # Calculate profit or loss based on the entry price (first trade)
                 entry_price = trade_history[0]['price']
-                profit_or_loss = (price - entry_price) * total_sell if side == 'sell' else (
-                                                                                                       entry_price - price) * total_buy
+                profit_or_loss = (price - entry_price) * total_sell if side == 'sell' \
+                    else (entry_price - price) * total_buy
                 outcome = 'profit' if profit_or_loss > 0 else 'loss'
 
                 # Construct the last closed trade dictionary
@@ -381,7 +381,7 @@ class BaseExchangeAdapter:
         try:
             _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")
             self._exchange.set_leverage(leverage, self.market_futures)
-        except Exception as exc:
+        except Exception:
             _logger.info(f"Leverage set up not supported on this exchange! {traceback.format_exc()}")
 
     @retry(retry_on_exception=retry_if_network_error,
@@ -440,7 +440,7 @@ class BaseExchangeAdapter:
             _notifier.error(msg)
             raise
 
-        except Exception as e:
+        except Exception:
             msg = f"{self._exchange.id} close_position failed with: {traceback.format_exc()}"
             _logger.error(msg)
             raise
@@ -483,7 +483,7 @@ class BaseExchangeAdapter:
             _logger.error(msg)
             raise
 
-        except Exception as e:
+        except Exception:
             msg = f"{self._exchange.id} close_position failed with: {traceback.format_exc()}"
             _logger.error(msg)
             raise
@@ -508,7 +508,6 @@ class BaseExchangeAdapter:
         if side:
             return position_order(side, amount, limit_price, stop_loss, take_profit)
         return position_order(amount)
-
 
 # class MexcExchange(BaseExchangeAdapter):
 #     def enter_position(self, side, amount):
