@@ -8,7 +8,7 @@ import pandas.io.sql as sqlio
 from database_tools.adapters.postgresql import PostgresqlAdapter
 from retrying import retry
 from slack_bot.notifications import SlackNotifier
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from sqlalchemy.exc import OperationalError, TimeoutError
 
 from config import (TRADE_RISK_ALLOCATION,
@@ -199,8 +199,16 @@ class TurtleTrader:
     def get_pl(self):
         _logger.info('Getting positions summary')
         with self._database.get_session() as session:
+            # query last closed position
+            last_closed_position_pl = session.query(
+                Order.pl, Order.pl_percent
+            ).filter(
+                Order.action == 'close',
+                Order.strategy_id == self.strategy_settings.id
+            ).order_by(desc(Order.timestamp)).first()
+
             # Query for the sum of P&L for opened positions with the specific symbol
-            asset_pl = session.query(
+            strategy_pl = session.query(
                 func.sum(Order.pl).label('filtered_total_pl')
             ).filter(
                 Order.strategy_id == self.strategy_settings.id
@@ -212,18 +220,19 @@ class TurtleTrader:
             ).scalar()
 
             # If there are no records matching the filters, set the values to 0.0
-            asset_pl = 0.0 if asset_pl is None else float(asset_pl)
+            strategy_pl = 0.0 if strategy_pl is None else float(strategy_pl)
             total_pl = 0.0 if total_pl is None else float(total_pl)
 
-        return asset_pl, total_pl
+        return last_closed_position_pl, round(strategy_pl, 1), round(total_pl, 1)
 
     def log_total_pl(self):
-        asset_pl, total_pl = self.get_pl()
-        msg = (f'\n==={self._exchange.market}===\n'
+        last_closed_pl, strategy_pl, total_pl = self.get_pl()
+        msg = (f'\n==={self._exchange.market} on {self.strategy_settings.exchange_id}===\n'
                f'strategy id: {self.strategy_settings.id}\n'
-               f'P/L = {asset_pl}\n'
-               f'Total P/L = {total_pl}\n'
-               f'Total balance: {self._exchange.total_balance}')
+               f'last trade P/L: {last_closed_pl[0]}$, {last_closed_pl[1]}%\n'
+               f'strategy P/L: {strategy_pl}$\n'
+               f'Total P/L: {total_pl}$\n'
+               f'Total balance: {round(self._exchange.total_balance, 0)}$')
         _logger.info(msg)
         _notifier.info(msg)
 

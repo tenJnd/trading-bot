@@ -24,12 +24,13 @@ def cli():
 
 
 @cli.command()
-@click.option('-exch', '--exchange', type=str, default='binance')
-@click.option('-t', '--ticker', type=str, default='BTC')
-def log_pl(exchange, ticker):
-    exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
-    exchange.market = f"{ticker}"
-    TurtleTrader(exchange).log_total_pl()
+@click.option('-exch', '--exchange_id', type=str, default='binance')
+def log_pl(exchange_id):
+    exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
+    strategy_settings = load_strategy_settings(exchange_id)
+    for strategy in strategy_settings:
+        exchange.market = f"{strategy.ticker}"
+        TurtleTrader(exchange, strategy).log_total_pl()
 
 
 @cli.command(help='close position manually')
