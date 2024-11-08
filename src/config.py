@@ -4,6 +4,8 @@ ROOT_FOLDER = os.path.dirname(os.path.abspath(__file__))
 DIR_NAME = os.path.dirname(ROOT_FOLDER)
 TRADING_DATA_DIR = os.path.join(DIR_NAME, "trading_data")
 
+LOOKER_URL = os.environ.get('LOOKER_URL', '')
+
 BINANCE_API_KEY_TEST = os.environ.get('BINANCE_API_KEY_TEST')
 BINANCE_API_SECRET_TEST = os.environ.get('BINANCE_API_SECRET_TEST')
 BINANCE_API_KEY = os.environ.get('BINANCE_API_KEY')

@@ -20,6 +20,7 @@ from config import (TRADE_RISK_ALLOCATION,
                     SLACK_URL)
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
+from src.config import LOOKER_URL
 from src.model import trader_database
 from src.model.turtle_model import Order, DepositsWithdrawals
 from src.schemas.turtle_schema import OrderSchema
@@ -244,6 +245,7 @@ class TurtleTrader:
             f"last trade P/L: {pl['last_closed_position_pl'][0]}$, {pl['last_closed_position_pl'][1]}%\n"
             f"strategy P/L: {pl['strategy_pl']}$\n"
             f"Total P/L: {pl['total_pl']}$, {pl['total_pl_percent']}%\n"
+            f"{LOOKER_URL}"
             # f'Total balance: {round(self._exchange.total_balance, 0)}$'
         )
         _logger.info(msg)
