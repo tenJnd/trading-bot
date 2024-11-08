@@ -2,6 +2,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Dict, Any
 
 import pandas as pd
 import pandas.io.sql as sqlio
@@ -20,7 +21,7 @@ from config import (TRADE_RISK_ALLOCATION,
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.model import trader_database
-from src.model.turtle_model import Order
+from src.model.turtle_model import Order, DepositsWithdrawals
 from src.schemas.turtle_schema import OrderSchema
 from src.utils.utils import save_json_to_file, get_adjusted_amount, calculate_atr
 
@@ -219,20 +220,32 @@ class TurtleTrader:
                 func.sum(Order.pl).label('total_pl')
             ).scalar()
 
+            invested_capital = session.query(
+                func.sum(DepositsWithdrawals.value).label('invested_capital')
+            ).scalar()
+            total_pl_percent = (total_pl / invested_capital) * 100
+
             # If there are no records matching the filters, set the values to 0.0
             strategy_pl = 0.0 if strategy_pl is None else float(strategy_pl)
             total_pl = 0.0 if total_pl is None else float(total_pl)
 
-        return last_closed_position_pl, round(strategy_pl, 1), round(total_pl, 1)
+        return {
+            'last_closed_position_pl': last_closed_position_pl,
+            'strategy_pl': round(strategy_pl, 1),
+            'total_pl': round(total_pl, 1),
+            'total_pl_percent': round(total_pl_percent, 1)
+        }
 
     def log_total_pl(self):
-        last_closed_pl, strategy_pl, total_pl = self.get_pl()
-        msg = (f'\n==={self._exchange.market} on {self.strategy_settings.exchange_id}===\n'
-               f'strategy id: {self.strategy_settings.id}\n'
-               f'last trade P/L: {last_closed_pl[0]}$, {last_closed_pl[1]}%\n'
-               f'strategy P/L: {strategy_pl}$\n'
-               f'Total P/L: {total_pl}$\n'
-               f'Total balance: {round(self._exchange.total_balance, 0)}$')
+        pl: Dict[str, Any] = self.get_pl()
+        msg = (
+            f'\n=== CLOSED {self._exchange.market} on {self.strategy_settings.exchange_id} ===\n'
+            f'strategy id: {self.strategy_settings.id}\n'
+            f"last trade P/L: {pl['last_closed_position_pl'][0]}$, {pl['last_closed_position_pl'][1]}%\n"
+            f"strategy P/L: {pl['strategy_pl']}$\n"
+            f"Total P/L: {pl['total_pl']}$, {pl['total_pl_percent']}%\n"
+            # f'Total balance: {round(self._exchange.total_balance, 0)}$'
+        )
         _logger.info(msg)
         _notifier.info(msg)
 
