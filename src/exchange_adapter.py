@@ -474,7 +474,7 @@ class BaseExchangeAdapter:
                 params=params
             )
 
-            _notifier.info(f"{self.market_futures} position CLOSED, amount: {amount}")
+            # _notifier.info(f"{self.market_futures} position CLOSED, amount: {amount}")
             return order
 
         except (ccxt.NetworkError, ccxt.ExchangeError) as e:
