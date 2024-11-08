@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
+
 from sqlalchemy import Column, Float, String, Boolean, BigInteger, JSON, Numeric, ARRAY, Integer, ForeignKey, Text
-from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from sqlalchemy_utc import UtcDateTime
+
 from src.model import trader_database
 
 Base = declarative_base()
@@ -88,6 +90,15 @@ class StrategySettings(TurtleBase):
     # Relationship to Order
     orders = relationship("Order", back_populates="strategy")
     agent_actions = relationship("AgentActions", back_populates="strategy")
+
+
+class DepositsWithdrawals(TurtleBase):
+    __tablename__ = 'deposits_withdrawals'
+
+    id = Column(Integer, primary_key=True)
+    exchange_id = Column(String)
+    timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    value = Column(Float)
 
 
 class AgentActions(TurtleBase):
