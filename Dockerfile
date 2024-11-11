@@ -40,4 +40,4 @@ USER 999
 ENV PATH="/app/venv/bin:$PATH"
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 
-CMD ["python", "src/main.py"]
+#CMD ["python", "src/main.py"]
