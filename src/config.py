@@ -52,6 +52,7 @@ KUCOIN_CONFIG_PROD = {
     'password': KUCOIN_PASS,
     'enableRateLimit': True,
     'options': {
+        'defaultType': 'swap',
         'leverage': LEVERAGE
     },
     'base_currency': 'USDT',

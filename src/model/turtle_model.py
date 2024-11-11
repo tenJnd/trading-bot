@@ -101,6 +101,22 @@ class DepositsWithdrawals(TurtleBase):
     value = Column(Float)
 
 
+class TurtleBackTest(TurtleBase):
+    __tablename__ = 'turtle_back_test'
+
+    id = Column(Integer, primary_key=True)
+    exchange_id = Column(String)
+    ticker = Column(String)
+    init_capital = Column(Float)
+    pl = Column(Float)
+    pl_percent = Column(Float)
+    final_capital = Column(Float)
+    trades = Column(ARRAY(Float))
+    timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    timeframe = Column(String)
+    period_days = Column(Integer)
+
+
 class AgentActions(TurtleBase):
     __tablename__ = 'agent_actions'
 

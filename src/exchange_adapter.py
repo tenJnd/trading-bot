@@ -109,6 +109,10 @@ class BaseExchangeAdapter:
         self._market = f"{name}/{self._base_currency}"
         self.market_futures = f"{self._market}:{self._base_currency}"
 
+    @property
+    def default_trading_type(self):
+        return self._exchange_config['options']['defaultType']
+
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)

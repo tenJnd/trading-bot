@@ -10,6 +10,7 @@ from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
 from src.llm_trader import LmmTrader
+from src.utils.turtle_back_test import turtle_back_test
 from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
 
@@ -107,6 +108,13 @@ def llm_trade(exchange_id):
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
         _notifier_llm.error(f"Trading error: {e}\n{traceback.format_exc()}")
         sys.exit(1)
+
+
+@cli.command(help='run LLM trading bot')
+@click.option('-exch', '--exchange_id', type=str, default='binance')
+def back_test(exchange_id):
+    _logger.info("\n============== BACKTEST ==============\n")
+    turtle_back_test(exchange_id)
 
 
 if __name__ == '__main__':
