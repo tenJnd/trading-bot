@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 
 import pandas as pd
 from database_tools.adapters.postgresql import PostgresqlAdapter
@@ -12,10 +12,10 @@ from sqlalchemy import desc
 
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
-from src.config import LLM_TRADER_SLACK_URL
+from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
-from src.prompts import llm_trader_prompt
+from src.prompts import llm_trader_prompt, llm_turtle_validator
 from src.utils.utils import calculate_macd, calculate_rsi, \
     calculate_sma, calculate_bollinger_bands, calculate_stochastic_oscillator, round_series, \
     calculate_auto_fibonacci, calculate_pivot_points, calculate_adx, calculate_atr, calculate_obv, \
@@ -42,31 +42,47 @@ class AgentAction:
 
 
 class LmmTrader:
+    SYSTEM_PROMPT = llm_trader_prompt
+    agent_action_obj = AgentAction
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
                  strategy_settings: StrategySettings = None,
                  db: PostgresqlAdapter = None,
-                 testing_file_path: bool = False,
+                 load_data=True,
                  ):
         self.strategy_settings = strategy_settings
         self._exchange = exchange
         self._database = trader_database if not db else db
 
-        self.last_close_price = ...
-        self.price_action_data = self.get_price_action_data()
-        self.opened_positions = self.get_open_positions_data()
-        self.opened_orders = self.get_open_orders_data()
-        self.trade_history = self.get_trade_history_data()
-        self.last_agent_output = self.get_last_agent_output()
-        self.exchange_settings = self.get_exchange_settings()
+        if load_data:
+            self.last_candle_timestamp = ...
+            self.last_close_price = ...
+            self.price_action_data = self.get_price_action_data()
+            self.opened_positions = self.get_open_positions_data()
+            self.opened_orders = self.get_open_orders_data()
+            self.trade_history = self.get_trade_history_data()
+            self.last_agent_output = self.get_last_agent_output()
+            self.exchange_settings = self.get_exchange_settings()
 
-        self.llm_input_data = self.create_llm_input_dict()
+            self.llm_input_data = self.create_llm_input_dict()
+
+    @classmethod
+    def init_just_exchange(cls,
+                           exchange: BaseExchangeAdapter,
+                           strategy_settings: StrategySettings = None,
+                           db: PostgresqlAdapter = None,
+                           ):
+        return cls(exchange=exchange, strategy_settings=strategy_settings, db=db, load_data=False)
 
     def get_last_agent_output(self):
         with self._database.session_manager() as session:
             last_agent_action = (
-                session.query(AgentActions.agent_output, AgentActions.timestamp_created)
+                session.query(
+                    AgentActions.agent_output,
+                    AgentActions.timestamp_created,
+                    AgentActions.candle_timestamp
+                )
                 .filter(AgentActions.strategy_id == self.strategy_settings.id)
                 .order_by(desc(AgentActions.timestamp_created))
                 .first()  # Get the most recent record
@@ -77,10 +93,11 @@ class LmmTrader:
             return None
 
         # Unpack the tuple and return as a dictionary
-        agent_output, timestamp_created = last_agent_action
+        agent_output, timestamp_created, candle_timestamp = last_agent_action
         return {
             'agent_output': agent_output,  # JSON object
-            'timestamp': timestamp_created  # Timestamp
+            'timestamp': timestamp_created,  # Timestamp
+            'candle_timestamp': candle_timestamp
         }
 
     def get_exchange_settings(self):
@@ -123,11 +140,9 @@ class LmmTrader:
             return None
 
     def get_ohcl_data(self):
-        n_days_ago = datetime.now() - timedelta(days=self.strategy_settings.buffer_days)
-        since_timestamp_ms = int(n_days_ago.timestamp() * 1000)
-
-        ohlc = self._exchange.fetch_ohlc(since=since_timestamp_ms, timeframe=self.strategy_settings.timeframe)
-
+        ohlc = self._exchange.fetch_ohlc(
+            days=self.strategy_settings.buffer_days, timeframe=self.strategy_settings.timeframe
+        )
         ohlc = calculate_atr(ohlc, period=20)
         return ohlc
 
@@ -203,6 +218,7 @@ class LmmTrader:
         df = self.get_ohcl_data()
 
         self.last_close_price = df.iloc[-1]['C']
+        self.last_candle_timestamp = df.iloc[-1]['timeframe']
 
         df.set_index('timeframe', inplace=True)
         df['sma_20'] = calculate_sma(df, period=20)
@@ -266,20 +282,49 @@ class LmmTrader:
 
         _logger.info("No constrains, can call the agent...")
 
+    @staticmethod
+    def generate_functions():
+        # TODO: adjust this (nullable fields) and prompt for this agent to use function call
+        return [
+            {
+                "name": "trading_decision",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string"},
+                        "amount": {"type": "number"},
+                        "entry_price": {"type": "number"},
+                        "order_id": {"type": "string"},
+                        "order_type": {"type": "string"},
+                        "rationale": {"type": "string"},
+                        "stop_loss": {"type": "number"},
+                        "take_profit": {"type": "number"}
+                    }
+                }
+            }
+        ]
+
     def call_agent(self):
         config = model_config.Gpt4Config
         _logger.info(f"creating agent using llm factory, config: {config.MODEL}")
         llm_client = LLMClientFactory.create_llm_client(config)
+        functions = self.generate_functions()
         _logger.info(f"Calling the agent...")
-        output = llm_client.call_agent(system_prompt=llm_trader_prompt, user_prompt=self.llm_input_data)
-        parsed_output = llm_client.parse_json_output(output)
+
+        response = llm_client.call_with_functions(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt=self.llm_input_data,
+            functions=functions
+        )
+        parsed_output = response.choices[0].message.function_call.arguments
+        structured_data = json.loads(parsed_output)
         _logger.info(f"agent call success")
 
-        return AgentAction(**parsed_output)
+        return self.agent_action_obj(**structured_data)
 
     def trade(self):
         self.check_constrains()
-        agent_action: AgentAction = self.call_agent()
+        agent_action = self.call_agent()
 
         order = None
         if agent_action.action == 'long' or agent_action.action == 'short':
@@ -310,7 +355,8 @@ class LmmTrader:
 
         self.save_agent_action(agent_action, order)
 
-    def save_agent_action(self, agent_action: AgentAction, order):
+    def save_agent_action(self, agent_action: AgentAction, order=None):
+        _logger.info("Saving agent action...")
         if order:
             order = json.dumps(order)
 
@@ -320,8 +366,64 @@ class LmmTrader:
                 rationale=agent_action.rationale,
                 agent_output=asdict(agent_action),
                 strategy_id=self.strategy_settings.id,
-                order=order
+                order=order,
+                candle_timestamp=int(self.last_candle_timestamp)
             )
             session.add(action_object)
 
         _logger.info("agent action saved")
+
+
+class LmmTurtleValidator(LmmTrader):
+    SYSTEM_PROMPT = llm_turtle_validator
+
+    def __init__(self,
+                 exchange: BaseExchangeAdapter,
+                 strategy_settings: StrategySettings = None,
+                 db: PostgresqlAdapter = None,
+                 load_data=True,
+                 ):
+        super().__init__(exchange, strategy_settings, db, load_data)
+
+    @property
+    def repeated_call_time_test(self):
+        repeated_call_time_test = True
+        if self.last_agent_output:
+            last_call = self.last_agent_output['timestamp']
+            now = datetime.now(timezone.utc)
+            diff = now - last_call
+            repeated_call_time_test = diff > timedelta(minutes=VALIDATOR_REPEATED_CALL_TIME_TEST_MIN)
+        return repeated_call_time_test
+
+    def create_llm_input_dict(self):
+        return {
+            'symbol': self._exchange.market_futures,
+            'price_data': self.price_action_data,
+            'opened_positions': self.opened_positions,
+            'last_agent_output': self.last_agent_output,
+        }
+
+    def expand_llm_input_dict(self, last_open_position):
+        self.opened_positions['stopLossPrice'] = last_open_position
+        self.llm_input_data = str(self.llm_input_data)
+
+    @staticmethod
+    def generate_functions():
+        return [
+            {
+                "name": "trading_decision",
+                "description": "Provide a trading decision based on market indicators.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["add_position", "wait", "set_stop_loss"]
+                        },
+                        "rationale": {"type": "string"},
+                        "stop_loss": {"type": "number", "nullable": True}
+                    },
+                    "required": ["action", "rationale"]
+                }
+            }
+        ]

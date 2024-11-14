@@ -9,7 +9,7 @@ from slack_bot.notifications import SlackNotifier
 from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
-from src.llm_trader import LmmTrader
+from src.llm_trader import LmmTrader, LmmTurtleValidator
 from src.utils.turtle_back_test import turtle_back_test
 from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
@@ -27,6 +27,7 @@ def cli():
 @cli.command()
 @click.option('-exch', '--exchange_id', type=str, default='binance')
 def log_pl(exchange_id):
+    _notifier.info("===Just logging P/L ===\n\n")
     exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
     strategy_settings = load_strategy_settings(exchange_id)
     for strategy in strategy_settings:
@@ -80,7 +81,7 @@ def trade(exchange_id):
 
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
-        _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}", echo='here')
         sys.exit(1)
 
 

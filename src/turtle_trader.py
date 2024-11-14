@@ -1,7 +1,6 @@
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import Dict, Any
 
 import pandas as pd
@@ -17,10 +16,11 @@ from config import (TRADE_RISK_ALLOCATION,
                     ATR_PERIOD,
                     TURTLE_ENTRY_DAYS,
                     TURTLE_EXIT_DAYS,
-                    SLACK_URL)
+                    SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN)
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
-from src.config import LOOKER_URL
+from src.config import LOOKER_URL, MIN_POSITION_THRESHOLD
+from src.llm_trader import LmmTurtleValidator
 from src.model import trader_database
 from src.model.turtle_model import Order, DepositsWithdrawals
 from src.schemas.turtle_schema import OrderSchema
@@ -158,6 +158,10 @@ class TurtleTrader:
             return self.opened_positions['id'].to_list()
         return None
 
+    def get_ticker_exchange_string(self):
+        return (f"{self._exchange.market} on {self._exchange.exchange_id}, "
+                f"si: {self.strategy_settings.id}\n")
+
     @retry(retry_on_exception=retry_if_sqlalchemy_transient_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=2000)
@@ -240,16 +244,16 @@ class TurtleTrader:
     def log_total_pl(self):
         pl: Dict[str, Any] = self.get_pl()
         msg = (
-            f'\n=== CLOSED {self._exchange.market} on {self.strategy_settings.exchange_id} ===\n'
-            f'strategy id: {self.strategy_settings.id}\n'
-            f"last trade P/L: {pl['last_closed_position_pl'][0]}$, {pl['last_closed_position_pl'][1]}%\n"
-            f"strategy P/L: {pl['strategy_pl']}$\n"
-            f"Total P/L: {pl['total_pl']}$, {pl['total_pl_percent']}%\n"
-            f"{LOOKER_URL}"
+                f'\n=== CLOSED ===\n' +
+                f'{self.get_ticker_exchange_string()} ' +
+                f"last trade P/L: {pl['last_closed_position_pl'][0]}$, {pl['last_closed_position_pl'][1]}%\n"
+                f"strategy P/L: {pl['strategy_pl']}$\n"
+                f"Total P/L: {pl['total_pl']}$, {pl['total_pl_percent']}%\n"
+                f"{LOOKER_URL}"
             # f'Total balance: {round(self._exchange.total_balance, 0)}$'
         )
         _logger.info(msg)
-        _notifier.info(msg)
+        _notifier.info(msg, echo='here')
 
     def calculate_pl(self, close_order: OrderSchema):
         if self.last_opened_position.is_long():
@@ -265,13 +269,11 @@ class TurtleTrader:
         return round(float(pl), 2), round(float(pl_percent), 2)
 
     def get_curr_market_conditions(self, testing_file_path: str = None):
-        n_days_ago = datetime.now() - timedelta(days=self.strategy_settings.buffer_days)
-        since_timestamp_ms = int(n_days_ago.timestamp() * 1000)
-
         if testing_file_path:
             ohlc = pd.read_csv(testing_file_path)
         else:
-            ohlc = self._exchange.fetch_ohlc(since=since_timestamp_ms, timeframe=self.strategy_settings.timeframe)
+            ohlc = self._exchange.fetch_ohlc(days=self.strategy_settings.buffer_days,
+                                             timeframe=self.strategy_settings.timeframe)
 
         ohlc = calculate_atr(ohlc, period=ATR_PERIOD)
         ohlc = turtle_trading_signals_adjusted(ohlc)
@@ -356,6 +358,17 @@ class TurtleTrader:
             session.add(order_object)
         _logger.info('Order successfully saved')
 
+    def update_stop_loss(self, stop_loss_price):
+        _logger.info(f"Updating stop loss to price: {stop_loss_price}...")
+        with self._database.session_manager() as session:
+            session.query(Order).filter(
+                Order.id == self.last_opened_position.id
+            ).update(
+                {"stop_loss_price": float(stop_loss_price)},
+                synchronize_session=False  # Use 'fetch' if objects are being used in the session
+            )
+        _logger.info("Stop-loss successfully updated")
+
     def save_order(self, order, action, position_status='opened'):
         _logger.info('Saving order to file and DB')
 
@@ -413,12 +426,18 @@ class TurtleTrader:
         _logger.info(f"Amount after precision rounding: {amount}")
 
         cost = self.curr_market_conditions.C * amount
-        if cost < self._exchange.min_cost or cost > free_balance:
-            _logger.warning(f"{self._exchange.market} on {self._exchange.exchange_id}\n"
-                            f"Cost {cost} is lower than "
-                            f"min cost {self._exchange.min_cost} "
-                            f"or higher than free_balance {free_balance} "
-                            f"SKIPPING")
+
+        min_cost_cond = cost < self._exchange.min_cost
+        cost_free_bal_cond = cost > free_balance
+        cost_higher_threshold = cost < MIN_POSITION_THRESHOLD
+        if min_cost_cond or cost_free_bal_cond or cost_higher_threshold:
+            msg = (self.get_ticker_exchange_string() +
+                   f"Cost {cost} is lower than "
+                   f"min cost {self._exchange.min_cost} "
+                   f"or higher than free_balance {free_balance} "
+                   f"SKIPPING")
+            _logger.warning(msg)
+            _notifier.warning(msg)
             return
 
         # each exchange has its own contract size
@@ -427,7 +446,7 @@ class TurtleTrader:
         # but on mexc = 1 contract
         amount = amount / self._exchange.contract_size
         if amount < self._exchange.min_amount:
-            msg = (f"{self._exchange.market} on {self._exchange.exchange_id}\n"
+            msg = (self.get_ticker_exchange_string() +
                    f"Amount {amount}, Contract size {self._exchange.contract_size} "
                    f"is lower than min_amount: {self._exchange.min_amount}, "
                    f"free_balance: {free_balance} - SKIPPING")
@@ -444,14 +463,13 @@ class TurtleTrader:
         if order:
             self.save_order(order, action)
 
-        msg = (f"Exchange: {self._exchange.exchange_id}\n"
-               f"strategy id: {self.strategy_settings.id}\n"
+        msg = (self.get_ticker_exchange_string() +
                f"Entered {self.strategy_settings.ticker}\n"
                f"Position: {action}\n"
                f"Amount: {amount} (amount can be different based on exchange handling contract size)\n"
                f"Cost: {cost} (amount can be different based on exchange handling contract size)\n")
         _logger.info(msg)
-        _notifier.info(msg)
+        _notifier.info(msg, echo='here')
 
     def exit_position(self):
         action = 'close'
@@ -460,6 +478,55 @@ class TurtleTrader:
             self.save_order(order, action, position_status='closed')
             self.update_closed_orders()
             self.log_total_pl()
+
+    def create_llm_validator(self) -> LmmTurtleValidator:
+        validator = LmmTurtleValidator(self._exchange, self.strategy_settings, self._database)
+        validator.expand_llm_input_dict(self.last_opened_position.stop_loss_price)
+        return validator
+
+    def process_agent_action(self, agent_action, side):
+        msg = ""
+        if agent_action.action == 'add_position':
+            msg = (self.get_ticker_exchange_string() +
+                   f"Lmm validator is adding to position\n"
+                   f"rationale: {agent_action.rationale}")
+            self.entry_position(side)
+        elif agent_action.action == 'set_stop_loss':
+            stop_loss = agent_action.stop_loss
+            if stop_loss:
+                msg = (self.get_ticker_exchange_string() +
+                       "Lmm validator is setting new stop-loss\n"
+                       f"stop-loss: {agent_action.stop_loss}, rationale: {agent_action.rationale}")
+                self.update_stop_loss(stop_loss)
+        else:
+            msg = (self.get_ticker_exchange_string() +
+                   "LMM validator action is to wait. "
+                   "We will wait for another run\n"
+                   f"action: {agent_action.action}, rationale: {agent_action.rationale}")
+
+        _logger.info(msg)
+        _notifier.info(msg, echo='here')
+
+    def pyramid_entry_w_validation(self, side):
+        validator = self.create_llm_validator()
+        if not validator.repeated_call_time_test:
+            msg = (self.get_ticker_exchange_string() +
+                   "LMM validator was called in less then "
+                   f"{VALIDATOR_REPEATED_CALL_TIME_TEST_MIN} minutes.\n"
+                   "We will wait for another run..")
+            _logger.info(msg)
+            _notifier.info(msg)
+        else:
+            try:
+                agent_action = validator.call_agent()
+                self.process_agent_action(agent_action, side)
+                validator.save_agent_action(agent_action)
+            except Exception as exc:
+                msg = (self.get_ticker_exchange_string() +
+                       "There was a problem with agent call - "
+                       f"SKIPPING ticker, {str(exc)}")
+                _logger.error(msg)
+                _notifier.error(msg, echo='here')
 
     def process_opened_position(self):
         _logger.info('Processing opened positions')
@@ -476,14 +543,14 @@ class TurtleTrader:
             if curr_mar_cond.long_exit:
                 _logger.info('Exiting long position/s')
                 self.exit_position()
-            # add to position -> pyramiding
-            elif curr_mar_cond.C >= long_pyramid_price and not pyramid_stop:
-                _logger.info(f'Adding to long position -> pyramid')
-                self.entry_position('long')
             # exit position -> stop loss
             elif curr_mar_cond.C <= last_stop_loss:
                 _logger.info('Initiating long stop-loss')
                 self.exit_position()
+            # add to position -> pyramiding
+            elif curr_mar_cond.C >= long_pyramid_price and not pyramid_stop:
+                _logger.info(f'Adding to long position -> check w LLM validator')
+                self.pyramid_entry_w_validation('long')
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
@@ -492,14 +559,14 @@ class TurtleTrader:
             if curr_mar_cond.short_exit:
                 _logger.info('Exiting short position/s')
                 self.exit_position()
-            # add to position -> pyramiding
-            elif curr_mar_cond.C <= short_pyramid_price and not pyramid_stop:
-                _logger.info(f'Adding to short position -> pyramid')
-                self.entry_position('short')
             # exit position -> stop loss
             elif curr_mar_cond.C >= last_stop_loss:
                 _logger.info('Initiating short stop-loss')
                 self.exit_position()
+            # add to position -> pyramiding
+            elif curr_mar_cond.C <= short_pyramid_price and not pyramid_stop:
+                _logger.info(f'Adding to short position -> check w LLM validator')
+                self.pyramid_entry_w_validation('short')
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
