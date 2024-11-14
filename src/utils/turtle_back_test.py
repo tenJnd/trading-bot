@@ -1,7 +1,6 @@
 import logging
 import sys
 import traceback
-from datetime import datetime, timedelta
 
 from src.exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
@@ -82,9 +81,6 @@ def turtle_back_test(exchange_id):
             if meta['type'] != exchange_adapter.default_trading_type:
                 exchange_adapter.markets.pop(market)
 
-        n_days_ago = datetime.now() - timedelta(days=period_days)
-        since_timestamp_ms = int(n_days_ago.timestamp() * 1000)
-
         with trader_database.session_manager() as session:
 
             for market, meta in exchange_adapter.markets.items():
@@ -96,7 +92,7 @@ def turtle_back_test(exchange_id):
                 # ).first()
                 # if not ticker_saved:
 
-                ohlc = exchange_adapter.fetch_ohlc(since=since_timestamp_ms, timeframe=timeframe)
+                ohlc = exchange_adapter.fetch_ohlc(days=period_days, timeframe=timeframe)
                 if ohlc.empty:
                     continue
                 ohlc = calculate_atr(ohlc, period=20)

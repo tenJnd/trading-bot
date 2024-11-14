@@ -1,13 +1,13 @@
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import ccxt
 import pandas as pd
 from retrying import retry
 from slack_bot.notifications import SlackNotifier
 
-from config import SLACK_URL, LEVERAGE, app_config
+from src.config import SLACK_URL, LEVERAGE, app_config
 
 _notifier = SlackNotifier(url=SLACK_URL, username='Exchange adapter')
 _logger = logging.getLogger(__name__)
@@ -116,7 +116,10 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def fetch_ohlc(self, since, timeframe: str = '4h', limit=500):
+    def fetch_ohlc(self, days, timeframe: str = '4h', limit=500):
+        n_days_ago = datetime.now() - timedelta(days=days)
+        since = int(n_days_ago.timestamp() * 1000)
+
         all_candles = []  # Store all fetched candles here
         candles_df = pd.DataFrame()
 

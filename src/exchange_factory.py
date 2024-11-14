@@ -3,7 +3,7 @@ import logging
 import ccxt
 from slack_bot.notifications import SlackNotifier
 
-from config import SLACK_URL
+from src.config import SLACK_URL
 from src.exchange_adapter import BaseExchangeAdapter
 
 _notifier = SlackNotifier(url=SLACK_URL, username='Exchange factory')
