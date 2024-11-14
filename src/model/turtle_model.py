@@ -127,6 +127,7 @@ class AgentActions(TurtleBase):
     strategy_id = Column(Integer, ForeignKey('turtle_strategy.strategy_settings.id'), nullable=True)
     timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     order = Column(JSON, nullable=True)
+    candle_timestamp = Column(BigInteger)
 
     strategy = relationship("StrategySettings", back_populates="agent_actions")
 
