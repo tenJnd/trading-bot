@@ -99,6 +99,8 @@ celerybeat-schedule
 /prod.env
 .env
 .venv
+prod_export.env
+prod.env
 env/
 venv/
 ENV/
