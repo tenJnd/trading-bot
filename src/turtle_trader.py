@@ -414,10 +414,11 @@ class TurtleTrader:
 
         cost = self.curr_market_conditions.C * amount
         if cost < self._exchange.min_cost or cost > free_balance:
-            _logger.warning(f"Cost {cost} is lower than "
+            _logger.warning(f"{self._exchange.market} on {self._exchange.exchange_id}\n"
+                            f"Cost {cost} is lower than "
                             f"min cost {self._exchange.min_cost} "
-                            f"or higher than free_balance {free_balance}"
-                            f"SKIPPING ticker")
+                            f"or higher than free_balance {free_balance} "
+                            f"SKIPPING")
             return
 
         # each exchange has its own contract size
@@ -426,10 +427,10 @@ class TurtleTrader:
         # but on mexc = 1 contract
         amount = amount / self._exchange.contract_size
         if amount < self._exchange.min_amount:
-            msg = (f"Amount {amount} is lower than "
-                   f"min_amount: {self._exchange.min_amount}, "
-                   f"free_balance: {free_balance}"
-                   f"SKIPPING ticker")
+            msg = (f"{self._exchange.market} on {self._exchange.exchange_id}\n"
+                   f"Amount {amount}, Contract size {self._exchange.contract_size} "
+                   f"is lower than min_amount: {self._exchange.min_amount}, "
+                   f"free_balance: {free_balance} - SKIPPING")
             _logger.warning(msg)
             _notifier.warning(msg)
             return
