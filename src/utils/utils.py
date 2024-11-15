@@ -3,6 +3,7 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import List
 
 import numpy as np
@@ -55,10 +56,15 @@ def save_json_to_file(order_data: dict, file_name: str):
 
 
 def get_adjusted_amount(amount, precision):
-    if precision == 0:
+    amount = Decimal(str(amount))
+    precision = Decimal(str(precision))
+
+    if precision <= 0:
+        # If precision is invalid, default to nearest integer
         return max(1, round(amount))
-    else:
-        return round(amount, int(precision))  # Ensure precision is an integer
+
+    # Adjust the amount to the nearest multiple of precision
+    return float((amount / precision).quantize(Decimal('1'), rounding=ROUND_HALF_UP) * precision)
 
 
 def none_to_default(value, default):
