@@ -9,7 +9,7 @@ from slack_bot.notifications import SlackNotifier
 from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
-from src.llm_trader import LmmTrader, LmmTurtleValidator
+from src.llm_trader import LmmTrader
 from src.utils.turtle_back_test import turtle_back_test
 from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
