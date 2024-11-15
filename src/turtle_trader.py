@@ -1,4 +1,5 @@
 import logging
+import traceback
 import uuid
 from dataclasses import dataclass
 from typing import Dict, Any
@@ -144,6 +145,7 @@ class TurtleTrader:
         self.opened_positions = None
         self.last_opened_position: LastOpenedPosition = None
         self.curr_market_conditions: CurrMarketConditions = None
+        self.minimal_entry_cost = MIN_POSITION_THRESHOLD
 
         self.get_opened_positions()
         self.get_curr_market_conditions(testing_file_path)
@@ -409,7 +411,7 @@ class TurtleTrader:
 
         self.commit_order_to_db(order_object)
 
-    def entry_position(self, action):
+    def calculate_entry_amount(self):
         self._exchange.fetch_balance()
         free_balance = self._exchange.free_balance
         total_balance = self._exchange.total_balance
@@ -421,15 +423,25 @@ class TurtleTrader:
                    self.curr_market_conditions.atr_20 *
                    self.curr_market_conditions.atr_period_ratio)
                   )
-        _logger.info(f"Amount before rounding: {amount}")
+
+        # exchange precision rounding
+        _logger.debug(f"Amount before rounding: {amount}")
         amount = get_adjusted_amount(amount, self._exchange.amount_precision)
-        _logger.info(f"Amount after precision rounding: {amount}")
+        _logger.debug(f"Amount after precision rounding: {amount}")
 
+        # cost conditions
         cost = self.curr_market_conditions.C * amount
-
         min_cost_cond = cost < self._exchange.min_cost
         cost_free_bal_cond = cost > free_balance
-        cost_higher_threshold = cost < MIN_POSITION_THRESHOLD
+        cost_higher_threshold = cost < self.minimal_entry_cost
+
+        # each exchange has its own contract size
+        # for example DOGE on binance = 1 but on mexc = 100
+        # if we want to buy 100 of doge on binance = 100 contracts
+        # but on mexc = 1 contract
+        amount = amount / self._exchange.contract_size
+
+        # check cost conditions/constrains
         if min_cost_cond or cost_free_bal_cond or cost_higher_threshold:
             msg = (self.get_ticker_exchange_string() +
                    f"Cost {cost} is lower than "
@@ -438,13 +450,9 @@ class TurtleTrader:
                    f"SKIPPING")
             _logger.warning(msg)
             _notifier.warning(msg)
-            return
+            return None
 
-        # each exchange has its own contract size
-        # for example DOGE on binance = 1 but on mexc = 100
-        # if we want to buy 100 of doge on binance = 100 contracts
-        # but on mexc = 1 contract
-        amount = amount / self._exchange.contract_size
+        # check amount conditions/constrains
         if amount < self._exchange.min_amount:
             msg = (self.get_ticker_exchange_string() +
                    f"Amount {amount}, Contract size {self._exchange.contract_size} "
@@ -452,12 +460,16 @@ class TurtleTrader:
                    f"free_balance: {free_balance} - SKIPPING")
             _logger.warning(msg)
             _notifier.warning(msg)
+            return None
+
+        return amount
+
+    def entry_position(self, action):
+        amount = self.calculate_entry_amount()
+        if not amount:
             return
 
-        _logger.info(f"Amount: {amount}"
-                     f"Contract size: {self._exchange.contract_size}"
-                     f"Amount of contracts: {amount}")
-
+        _logger.info(f"Amount: {amount}, Contract size: {self._exchange.contract_size}")
         order = self._exchange.order(action, amount)
 
         if order:
@@ -466,8 +478,8 @@ class TurtleTrader:
         msg = (self.get_ticker_exchange_string() +
                f"Entered {self.strategy_settings.ticker}\n"
                f"Position: {action}\n"
-               f"Amount: {amount} (amount can be different based on exchange handling contract size)\n"
-               f"Cost: {cost} (amount can be different based on exchange handling contract size)\n")
+               f"Amount: {amount}, Contract_size: {self._exchange.contract_size}\n"
+               )
         _logger.info(msg)
         _notifier.info(msg, echo='here')
 
@@ -509,6 +521,9 @@ class TurtleTrader:
 
     def pyramid_entry_w_validation(self, side):
         validator = self.create_llm_validator()
+
+        # check if validator have run in VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
+        # and skipp validation if test not passed (False)
         if not validator.repeated_call_time_test:
             msg = (self.get_ticker_exchange_string() +
                    "LMM validator was called in less then "
@@ -523,8 +538,8 @@ class TurtleTrader:
                 validator.save_agent_action(agent_action)
             except Exception as exc:
                 msg = (self.get_ticker_exchange_string() +
-                       "There was a problem with agent call - "
-                       f"SKIPPING ticker, {str(exc)}")
+                       f"{str(exc)}, traceback: {traceback.format_exc()}"
+                       f"There was a problem with agent call - SKIPPING ticker")
                 _logger.error(msg)
                 _notifier.error(msg, echo='here')
 
@@ -537,6 +552,8 @@ class TurtleTrader:
 
         # check if number of pyramid trade is over limit
         pyramid_stop = self.n_of_opened_positions > self.strategy_settings.pyramid_entry_limit
+        self.minimal_entry_cost = self.minimal_entry_cost / 2
+        _logger.info(f"Setting minimal entry cost to {self.minimal_entry_cost}")
 
         if self.last_opened_position.is_long():
             # exit position

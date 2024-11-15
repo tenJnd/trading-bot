@@ -2,6 +2,7 @@ import json
 import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
+from typing import Dict
 
 import pandas as pd
 from database_tools.adapters.postgresql import PostgresqlAdapter
@@ -400,11 +401,11 @@ class LmmTurtleValidator(LmmTrader):
             'symbol': self._exchange.market_futures,
             'price_data': self.price_action_data,
             'opened_positions': self.opened_positions,
-            'last_agent_output': self.last_agent_output,
         }
 
     def expand_llm_input_dict(self, last_open_position):
-        self.opened_positions['stopLossPrice'] = last_open_position
+        if self.last_agent_output:
+            self.opened_positions['stopLossPrice'] = last_open_position
         self.llm_input_data = str(self.llm_input_data)
 
     @staticmethod
@@ -427,3 +428,15 @@ class LmmTurtleValidator(LmmTrader):
                 }
             }
         ]
+
+    def get_last_agent_output(self):
+        ao = super().get_last_agent_output()
+        if not ao:
+            return None
+
+        agent_action_dict: Dict[str, str] = ao['agent_output']
+        ao['agent_output'] = {k: v for k, v in agent_action_dict.items()
+                              if k in ['action', 'rationale', 'stop_loss']}
+        return ao
+
+
