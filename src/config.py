@@ -97,7 +97,7 @@ MAX_ONE_ASSET_RISK_ALLOCATION = float(os.environ.get(
 ATR_PERIOD = int(os.environ.get('ATR_PERIOD', 20))  # 20 for slow, 50 for fast
 TURTLE_ENTRY_DAYS = int(os.environ.get('TURTLE_ENTRY_DAYS', ATR_PERIOD))  # 20 for fast, 50 for slow
 TURTLE_EXIT_DAYS = int(os.environ.get('TURTLE_EXIT_DAYS', 10))  # 10 for fast, 20 for slow
-MIN_POSITION_THRESHOLD = int(os.environ.get('MIN_POSITION_THRESHOLD', 20))
+MIN_POSITION_THRESHOLD = int(os.environ.get('MIN_POSITION_THRESHOLD', 30))
 VALIDATOR_REPEATED_CALL_TIME_TEST_MIN = int(os.environ.get('VALIDATOR_REPEATED_CALL_TIME_TEST_MIN', 60))
 
 
