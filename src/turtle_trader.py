@@ -17,7 +17,9 @@ from config import (TRADE_RISK_ALLOCATION,
                     ATR_PERIOD,
                     TURTLE_ENTRY_DAYS,
                     TURTLE_EXIT_DAYS,
-                    SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN)
+                    SLACK_URL,
+                    VALIDATOR_REPEATED_CALL_TIME_TEST_MIN,
+                    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD)
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.config import LOOKER_URL, MIN_POSITION_THRESHOLD
@@ -160,8 +162,9 @@ class TurtleTrader:
             return self.opened_positions['id'].to_list()
         return None
 
-    def get_ticker_exchange_string(self):
-        return (f"{self._exchange.market} on {self._exchange.exchange_id}, "
+    def get_ticker_exchange_string(self, objective: str = ''):
+        return (f"\n=== {str.upper(objective)} ===\n "
+                f"{self._exchange.market} on {self._exchange.exchange_id}, "
                 f"si: {self.strategy_settings.id}\n")
 
     @retry(retry_on_exception=retry_if_sqlalchemy_transient_error,
@@ -361,6 +364,7 @@ class TurtleTrader:
         _logger.info('Order successfully saved')
 
     def update_stop_loss(self, stop_loss_price):
+        # TODO check agent stop loss
         _logger.info(f"Updating stop loss to price: {stop_loss_price}...")
         with self._database.session_manager() as session:
             session.query(Order).filter(
@@ -418,51 +422,61 @@ class TurtleTrader:
         free_balance = self.recalc_limited_free_entry_balance(free_balance, total_balance)
 
         trade_risk_cap = free_balance * TRADE_RISK_ALLOCATION
-        amount = (trade_risk_cap /
-                  (self.strategy_settings.stop_loss_atr_multipl *
-                   self.curr_market_conditions.atr_20 *
-                   self.curr_market_conditions.atr_period_ratio)
-                  )
+        raw_amount = (
+                             trade_risk_cap /
+                             (
+                                     self.strategy_settings.stop_loss_atr_multipl *
+                                     self.curr_market_conditions.atr_20 *
+                                     self.curr_market_conditions.atr_period_ratio
+                             )
+                     ) / self._exchange.contract_size
 
-        # exchange precision rounding
-        _logger.debug(f"Amount before rounding: {amount}")
-        amount = get_adjusted_amount(amount, self._exchange.amount_precision)
-        _logger.debug(f"Amount after precision rounding: {amount}")
+        _logger.debug(f"Raw calculated amount: {raw_amount}")
 
-        # cost conditions
-        cost = self.curr_market_conditions.C * amount
-        min_cost_cond = cost < self._exchange.min_cost
-        cost_free_bal_cond = cost > free_balance
-        cost_higher_threshold = cost < self.minimal_entry_cost
-
-        # each exchange has its own contract size
-        # for example DOGE on binance = 1 but on mexc = 100
-        # if we want to buy 100 of doge on binance = 100 contracts
-        # but on mexc = 1 contract
-        amount = amount / self._exchange.contract_size
-
-        # check cost conditions/constrains
-        if min_cost_cond or cost_free_bal_cond or cost_higher_threshold:
-            msg = (self.get_ticker_exchange_string() +
-                   f"Cost {cost} is lower than "
-                   f"min cost {self._exchange.min_cost} "
-                   f"or higher than free_balance {free_balance} "
-                   f"SKIPPING")
+        # Check if the raw amount is below the minimum tradable amount
+        if raw_amount < self._exchange.min_amount:
+            msg = (self.get_ticker_exchange_string('raw amount below minimum') +
+                   f"Calculated raw amount {raw_amount} is below the minimum tradable amount "
+                   f"{self._exchange.min_amount}. SKIPPING")
             _logger.warning(msg)
             _notifier.warning(msg)
             return None
 
-        # check amount conditions/constrains
-        if amount < self._exchange.min_amount:
-            msg = (self.get_ticker_exchange_string() +
-                   f"Amount {amount}, Contract size {self._exchange.contract_size} "
-                   f"is lower than min_amount: {self._exchange.min_amount}, "
-                   f"free_balance: {free_balance} - SKIPPING")
+        # Calculate cost before rounding
+        raw_cost = raw_amount * self.curr_market_conditions.C * self._exchange.contract_size
+        _logger.debug(f"Cost before rounding: {raw_cost}")
+
+        # Apply exchange precision rounding
+        rounded_amount = get_adjusted_amount(raw_amount, self._exchange.amount_precision)
+        _logger.debug(f"Rounded amount: {rounded_amount}")
+
+        # Calculate cost after rounding
+        rounded_cost = rounded_amount * self.curr_market_conditions.C * self._exchange.contract_size
+        _logger.debug(f"Cost after rounding: {rounded_cost}")
+
+        # Ensure costs are within acceptable percentage difference
+        percentage_difference = abs(rounded_cost - raw_cost) / raw_cost * 100
+        if percentage_difference > ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD:
+            msg = (self.get_ticker_exchange_string('cost mismatch') +
+                   f"Percentage difference between pre-rounded cost ({raw_cost}) "
+                   f"and post-rounded cost ({rounded_cost}) is {percentage_difference:.2f}%, "
+                   f"exceeding the threshold of {ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD}%. SKIPPING")
             _logger.warning(msg)
             _notifier.warning(msg)
             return None
 
-        return amount
+        # check if cost is above minimal entry cost constant
+        minimal_entry_cond = rounded_cost < self.minimal_entry_cost
+        if minimal_entry_cond:
+            msg = (self.get_ticker_exchange_string('not enough balance') +
+                   f"Cost {rounded_cost} is lower than "
+                   f"free_balance {free_balance}, "
+                   f"or lower than minimal entry cost constraint {self.minimal_entry_cost}. SKIPPING")
+            _logger.warning(msg)
+            _notifier.warning(msg)
+            return None
+
+        return rounded_amount
 
     def entry_position(self, action):
         amount = self.calculate_entry_amount()
@@ -475,10 +489,10 @@ class TurtleTrader:
         if order:
             self.save_order(order, action)
 
-        msg = (self.get_ticker_exchange_string() +
-               f"Entered {self.strategy_settings.ticker}\n"
+        msg = (self.get_ticker_exchange_string('Entered') +
                f"Position: {action}\n"
-               f"Amount: {amount}, Contract_size: {self._exchange.contract_size}\n"
+               f"Amount: {amount}\n"
+               f"Contract_size: {self._exchange.contract_size}\n"
                )
         _logger.info(msg)
         _notifier.info(msg, echo='here')
@@ -499,19 +513,19 @@ class TurtleTrader:
     def process_agent_action(self, agent_action, side):
         msg = ""
         if agent_action.action == 'add_position':
-            msg = (self.get_ticker_exchange_string() +
+            msg = (self.get_ticker_exchange_string('lmm add position') +
                    f"Lmm validator is adding to position\n"
                    f"rationale: {agent_action.rationale}")
             self.entry_position(side)
         elif agent_action.action == 'set_stop_loss':
             stop_loss = agent_action.stop_loss
             if stop_loss:
-                msg = (self.get_ticker_exchange_string() +
+                msg = (self.get_ticker_exchange_string('lmm stop-loss') +
                        "Lmm validator is setting new stop-loss\n"
                        f"stop-loss: {agent_action.stop_loss}, rationale: {agent_action.rationale}")
                 self.update_stop_loss(stop_loss)
         else:
-            msg = (self.get_ticker_exchange_string() +
+            msg = (self.get_ticker_exchange_string('llm hold') +
                    "LMM validator action is to wait. "
                    "We will wait for another run\n"
                    f"action: {agent_action.action}, rationale: {agent_action.rationale}")
@@ -525,7 +539,7 @@ class TurtleTrader:
         # check if validator have run in VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
         # and skipp validation if test not passed (False)
         if not validator.repeated_call_time_test:
-            msg = (self.get_ticker_exchange_string() +
+            msg = (self.get_ticker_exchange_string('llm repeated call') +
                    "LMM validator was called in less then "
                    f"{VALIDATOR_REPEATED_CALL_TIME_TEST_MIN} minutes.\n"
                    "We will wait for another run..")
@@ -537,7 +551,7 @@ class TurtleTrader:
                 self.process_agent_action(agent_action, side)
                 validator.save_agent_action(agent_action)
             except Exception as exc:
-                msg = (self.get_ticker_exchange_string() +
+                msg = (self.get_ticker_exchange_string('lmm call exception') +
                        f"{str(exc)}, traceback: {traceback.format_exc()}"
                        f"There was a problem with agent call - SKIPPING ticker")
                 _logger.error(msg)
