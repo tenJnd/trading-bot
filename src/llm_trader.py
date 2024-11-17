@@ -45,6 +45,7 @@ class AgentAction:
 class LmmTrader:
     SYSTEM_PROMPT = llm_trader_prompt
     agent_action_obj = AgentAction
+    df_tail_for_agent = 20
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -248,9 +249,8 @@ class LmmTrader:
             merged_df = pd.merge(merged_df, fr, how='outer', left_index=True, right_index=True)
 
         merged_df = merged_df.drop(['datetime'], axis=1)
-        test_df_tail = merged_df.tail(20)
-
-        price_data_csv = test_df_tail.to_csv()
+        df_tail = merged_df.tail(self.df_tail_for_agent)
+        price_data_csv = df_tail.to_csv()
 
         price_data_dict = {
             'price_and_indicators': price_data_csv,
