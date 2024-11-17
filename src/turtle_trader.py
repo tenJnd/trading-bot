@@ -521,9 +521,12 @@ class TurtleTrader:
         elif agent_action.action == 'set_stop_loss':
             stop_loss = agent_action.stop_loss
             if stop_loss:
-                msg = (self.get_ticker_exchange_string('lmm stop-loss') +
-                       "Lmm validator is setting new stop-loss\n"
-                       f"stop-loss: {agent_action.stop_loss}, rationale: {agent_action.rationale}")
+                msg = (self.get_ticker_exchange_string('llm stop-loss') +
+                       "Llm validator is setting new stop-loss\n"
+                       f"curr price: {self.curr_market_conditions.C}, "
+                       f"atr_20: {self.curr_market_conditions.atr_20}\n"
+                       f"stop-loss: {agent_action.stop_loss}\n"
+                       f"rationale: {agent_action.rationale}")
                 self.update_stop_loss(stop_loss)
         else:
             msg = (self.get_ticker_exchange_string('llm hold') +
