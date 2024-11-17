@@ -280,7 +280,8 @@ class TurtleTrader:
             ohlc = self._exchange.fetch_ohlc(days=self.strategy_settings.buffer_days,
                                              timeframe=self.strategy_settings.timeframe)
 
-        ohlc = calculate_atr(ohlc, period=ATR_PERIOD)
+        ohlc['atr_20'] = calculate_atr(ohlc, period=ATR_PERIOD)
+        ohlc['atr_50'] = calculate_atr(ohlc, period=50)
         ohlc = turtle_trading_signals_adjusted(ohlc)
 
         curr_market_con = ohlc.iloc[-1].to_dict()

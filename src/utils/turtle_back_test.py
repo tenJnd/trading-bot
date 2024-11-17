@@ -95,7 +95,8 @@ def turtle_back_test(exchange_id):
                 ohlc = exchange_adapter.fetch_ohlc(days=period_days, timeframe=timeframe)
                 if ohlc.empty:
                     continue
-                ohlc = calculate_atr(ohlc, period=20)
+                ohlc['atr_20'] = calculate_atr(ohlc, period=20)
+                ohlc['atr_50'] = calculate_atr(ohlc, period=50)
                 result = calculate_back_test_profits(ohlc)
 
                 obj = TurtleBackTest(

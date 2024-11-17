@@ -158,15 +158,6 @@ def calculate_macd(df, short_period=12, long_period=26, signal_period=9, column=
     return macd_line_rounded, signal_line_rounded
 
 
-def calculate_atr(df, period=14):
-    """Average True Range (ATR)"""
-    high_low = df['H'] - df['L']
-    high_close = np.abs(df['H'] - df['C'].shift(1))
-    low_close = np.abs(df['L'] - df['C'].shift(1))
-    tr = high_low.to_frame().join([high_close, low_close]).max(axis=1)
-    return round_series(tr.rolling(window=period).mean())
-
-
 def calculate_obv(df):
     """
     Calculate the On-Balance Volume (OBV) indicator.
@@ -276,7 +267,7 @@ def calculate_pivot_points(df, lookback_periods=[5, 10]):
     return pivot_dict
 
 
-def calculate_atr(df, period=ATR_PERIOD, long_period=50):
+def calculate_atr(df, period=ATR_PERIOD):
     """
     Calculate the Average True Range (ATR) for given OHLCV DataFrame.
 
@@ -296,13 +287,12 @@ def calculate_atr(df, period=ATR_PERIOD, long_period=50):
     df['true_range'] = df[['high_low', 'high_prev_close', 'low_prev_close']].max(axis=1)
 
     # Calculate the ATR
-    df['atr_20'] = round_series(df['true_range'].rolling(window=period, min_periods=1).mean())
-    df['atr_50'] = round_series(df['true_range'].rolling(window=long_period, min_periods=1).mean())
+    atr = round_series(df['true_range'].rolling(window=period, min_periods=1).mean())
 
     # Clean up the DataFrame by removing the intermediate columns
     df.drop(['high_low', 'high_prev_close', 'low_prev_close', 'true_range'], axis=1, inplace=True)
 
-    return df
+    return atr
 
 
 def calculate_adx(df, n_periods=14):
