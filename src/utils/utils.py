@@ -408,6 +408,7 @@ class StrategySettingsModel:
     aggressive_pyramid_entry_multipl: float
     aggressive_price_atr_ratio: float
     pyramid_entry_limit: int
+    sub_account_id: str
 
     @classmethod
     def from_orm(cls, orm_obj):
@@ -422,7 +423,8 @@ class StrategySettingsModel:
             pyramid_entry_atr_multipl=none_to_default(orm_obj.pyramid_entry_atr_multipl, 1),
             aggressive_pyramid_entry_multipl=none_to_default(orm_obj.aggressive_pyramid_entry_multipl, 0.5),
             aggressive_price_atr_ratio=none_to_default(orm_obj.aggressive_price_atr_ratio, 0.02),
-            pyramid_entry_limit=none_to_default(orm_obj.pyramid_entry_limit, 4)
+            pyramid_entry_limit=none_to_default(orm_obj.pyramid_entry_limit, 4),
+            sub_account_id=none_to_default(orm_obj.sub_account_id, None)
         )
 
 
@@ -440,6 +442,7 @@ def load_strategy_settings(exchange_id, agent_id: str = 'turtle_trader') -> List
             StrategySettings.aggressive_pyramid_entry_multipl,
             StrategySettings.aggressive_price_atr_ratio,
             StrategySettings.pyramid_entry_limit,
+            StrategySettings.sub_account_id
         ).filter(
             StrategySettings.exchange_id == exchange_id,
             StrategySettings.active == True,

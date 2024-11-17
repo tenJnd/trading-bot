@@ -1,6 +1,5 @@
 import logging
 
-import ccxt
 from slack_bot.notifications import SlackNotifier
 
 from src.config import SLACK_URL
@@ -11,11 +10,10 @@ _logger = logging.getLogger(__name__)
 
 
 class ExchangeFactory:
-
     @staticmethod
-    def get_exchange(exchange_id: str, market: str = None) -> ccxt.Exchange:
-        _logger.info(f"Creating exchange adapter for {exchange_id}")
-        if exchange_id in ['binance', 'kucoinfutures', 'bybit']:
-            return BaseExchangeAdapter(exchange_id, market)
+    def get_exchange(exchange_id: str, sub_account_id: str = None, market: str = None) -> BaseExchangeAdapter:
+        _logger.info(f"Creating exchange adapter for {exchange_id}, sub-account: {sub_account_id}")
+        if exchange_id in ['binance', 'kucoinfutures', 'bybit', 'mexc']:
+            return BaseExchangeAdapter(exchange_id, sub_account_id, market)
         else:
             raise ValueError(f"Unsupported exchange: {exchange_id}")

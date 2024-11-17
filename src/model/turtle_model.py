@@ -86,6 +86,7 @@ class StrategySettings(TurtleBase):
 
     active = Column(Boolean, default=False)
     agent_id = Column(String)
+    sub_account_id = Column(String)
 
     # Relationship to Order
     orders = relationship("Order", back_populates="strategy")

@@ -1,5 +1,6 @@
 import logging
 import traceback
+from copy import deepcopy
 from datetime import datetime, timedelta
 
 import ccxt
@@ -28,12 +29,26 @@ def retry_if_network_error(exception):
 
 
 class BaseExchangeAdapter:
-    global_params = {'leverage': LEVERAGE}
-
-    def __init__(self, exchange_id: str, market: str = None):
+    def __init__(self, exchange_id: str, sub_account_id: str = None, market: str = None):
         self.exchange_id = exchange_id
         exchange_class = getattr(ccxt, self.exchange_id)
-        self._exchange_config = app_config.EXCHANGES[exchange_id]
+
+        # Start with a deep copy of the exchange configuration
+        base_config = deepcopy(app_config.EXCHANGES[exchange_id])
+
+        # Apply sub-account keys if provided
+        if sub_account_id:
+            sub_account_config = base_config.get('sub_accounts', {}).get(sub_account_id)
+            if not sub_account_config:
+                raise ValueError(f"Sub-account '{sub_account_id}' not found for exchange '{exchange_id}'")
+            # Explicitly update only the API credentials
+            base_config['apiKey'] = sub_account_config['apiKey']
+            base_config['secret'] = sub_account_config['secret']
+
+        # Remove sub-accounts key to avoid passing it to the exchange object
+        base_config.pop('sub_accounts', None)
+
+        self._exchange_config = base_config
         self._exchange = exchange_class(self._exchange_config)
 
         self._base_currency = self._exchange.base_currency

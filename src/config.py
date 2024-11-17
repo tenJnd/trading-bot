@@ -79,11 +79,16 @@ BYBIT_CONFIG_PROD = {
         'defaultType': 'swap'
     },
     'base_currency': 'USDT',
+    'sub_accounts': {
+        'sub_account_1': {
+            'apiKey': '',
+            'secret': ''
+        }
+    }
 }
 
 SLACK_URL = os.environ.get("SLACK_URL")
 LLM_TRADER_SLACK_URL = os.environ.get("LLM_TRADER_SLACK_URL")
-APP_SETTINGS = os.environ.get("APP_SETTINGS", "DevConfig")
 
 # turtle strategy
 # risks
@@ -100,6 +105,8 @@ TURTLE_EXIT_DAYS = int(os.environ.get('TURTLE_EXIT_DAYS', 10))  # 10 for fast, 2
 MIN_POSITION_THRESHOLD = int(os.environ.get('MIN_POSITION_THRESHOLD', 20))
 VALIDATOR_REPEATED_CALL_TIME_TEST_MIN = int(os.environ.get('VALIDATOR_REPEATED_CALL_TIME_TEST_MIN', 60))
 ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD = int(os.environ.get('ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD', 5))
+
+APP_SETTINGS = os.environ.get("APP_SETTINGS", "DevConfig")
 
 
 class Config:
