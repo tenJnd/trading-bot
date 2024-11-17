@@ -17,10 +17,10 @@ from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_M
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, llm_turtle_validator
-from src.utils.utils import calculate_macd, calculate_rsi, \
-    calculate_sma, calculate_bollinger_bands, calculate_stochastic_oscillator, round_series, \
-    calculate_auto_fibonacci, calculate_pivot_points, calculate_adx, calculate_atr, calculate_obv, \
-    shorten_large_numbers, dynamic_safe_round
+from src.utils.utils import (calculate_sma, round_series,
+                             calculate_auto_fibonacci,
+                             calculate_pivot_points, shorten_large_numbers,
+                             dynamic_safe_round, calculate_indicators_for_llm_trader)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -213,6 +213,10 @@ class LmmTrader:
         th = self._exchange.process_last_trade_with_sl_tp(th)
         return th
 
+    @staticmethod
+    def _calculate_indicators_for_llm_trader(df):
+        return calculate_indicators_for_llm_trader(df)
+
     def get_price_action_data(self):
         oi = self.preprocess_open_interest()
         fr = self.preprocess_funding_rate()
@@ -222,19 +226,7 @@ class LmmTrader:
         self.last_candle_timestamp = df.iloc[-1]['timeframe']
 
         df.set_index('timeframe', inplace=True)
-        df['atr_20'] = calculate_atr(df, period=20)
-        df['atr_50'] = calculate_atr(df, period=50)
-        df['sma_20'] = calculate_sma(df, period=20)
-        df['sma_50'] = calculate_sma(df, period=50)
-        df['sma_100'] = calculate_sma(df, period=100)
-        df['sma_200'] = calculate_sma(df, period=200)
-        df['rsi_14'] = calculate_rsi(df, period=14)
-        df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
-        df['bb_middle_20'], df['bb_upper_20'], df['bb_lower_20'] = calculate_bollinger_bands(df)
-        df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
-        df['adx_20'] = calculate_adx(df, n_periods=20)
-        df['obv'] = round_series(calculate_obv(df), 0)
-        df['obv_sma_20'] = round_series(calculate_sma(df, period=20, column='obv'), 0)
+        df = self._calculate_indicators_for_llm_trader(df)
 
         df = shorten_large_numbers(df, 'obv')
         df = shorten_large_numbers(df, 'obv_sma_20')
@@ -439,5 +431,3 @@ class LmmTurtleValidator(LmmTrader):
         ao['agent_output'] = {k: v for k, v in agent_action_dict.items()
                               if k in ['action', 'rationale', 'stop_loss']}
         return ao
-
-

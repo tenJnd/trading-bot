@@ -358,6 +358,23 @@ def shorten_large_numbers(df, column_name):
     return df
 
 
+def calculate_indicators_for_llm_trader(df):
+    df['atr_20'] = calculate_atr(df, period=20)
+    df['atr_50'] = calculate_atr(df, period=50)
+    df['sma_20'] = calculate_sma(df, period=20)
+    df['sma_50'] = calculate_sma(df, period=50)
+    df['sma_100'] = calculate_sma(df, period=100)
+    df['sma_200'] = calculate_sma(df, period=200)
+    df['rsi_14'] = calculate_rsi(df, period=14)
+    df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+    df['bb_middle_20'], df['bb_upper_20'], df['bb_lower_20'] = calculate_bollinger_bands(df)
+    df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
+    df['adx_20'] = calculate_adx(df, n_periods=20)
+    df['obv'] = round_series(calculate_obv(df), 0)
+    df['obv_sma_20'] = round_series(calculate_sma(df, period=20, column='obv'), 0)
+    return df
+
+
 def time_ago_string(timestamp_created: datetime) -> str:
     now = datetime.now(timezone.utc)
     time_diff = now - timestamp_created

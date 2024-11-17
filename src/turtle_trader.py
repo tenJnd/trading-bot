@@ -469,7 +469,7 @@ class TurtleTrader:
         # check if cost is above minimal entry cost constant
         minimal_entry_cond = rounded_cost < self.minimal_entry_cost
         if minimal_entry_cond:
-            msg = (self.get_ticker_exchange_string('not enough balance') +
+            msg = (self.get_ticker_exchange_string('min entry condition') +
                    f"Cost {rounded_cost} is lower than "
                    f"free_balance {free_balance}, "
                    f"or lower than minimal entry cost constraint {self.minimal_entry_cost}. SKIPPING")
@@ -545,7 +545,7 @@ class TurtleTrader:
                    f"{VALIDATOR_REPEATED_CALL_TIME_TEST_MIN} minutes.\n"
                    "We will wait for another run..")
             _logger.info(msg)
-            _notifier.info(msg)
+            # _notifier.info(msg)
         else:
             try:
                 agent_action = validator.call_agent()
