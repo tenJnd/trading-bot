@@ -372,10 +372,13 @@ class LmmTrader:
         else:
             msg = f"Agent holds in strategy {self.strategy_settings.id}:\n {asdict(agent_action)}"
 
-        _logger.info(msg)
-        _notifier.info(msg)
-
         self.save_agent_action(agent_action, order)
+
+        _logger.info(msg)
+        if agent_action.action == 'hold':
+            _notifier.info(msg)
+        else:
+            _notifier.info(msg, echo='here')
 
     def save_agent_action(self, agent_action: AgentAction, order=None):
         _logger.info("Saving agent action...")
