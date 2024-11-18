@@ -100,7 +100,8 @@ class BaseExchangeAdapter:
             self.fetch_balance()
         if self.balance:
             binance_bnfcr = self.balance['free'].get('BNFCR', 0)
-            free = self.balance['free'][self._base_currency] + binance_bnfcr
+            balance_base = self.balance['free'].get(self._base_currency, 0)
+            free = balance_base + binance_bnfcr
             return free
         return 0
 
@@ -110,7 +111,8 @@ class BaseExchangeAdapter:
             self.fetch_balance()
         if self.balance:
             binance_bnfcr = self.balance['total'].get('BNFCR', 0)
-            total = self.balance['total'][self._base_currency] + binance_bnfcr
+            balance_base = self.balance['total'].get(self._base_currency, 0)
+            total = balance_base + binance_bnfcr
             return total
         return 0
 
