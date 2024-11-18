@@ -191,6 +191,20 @@ class BaseExchangeAdapter:
             _logger.warning(f"An unexpected error occurred: {e}")
             return None
 
+    def get_funding_rate(self):
+        try:
+            funding_rate = self._exchange.fetch_funding_rate(symbol=self.market_futures)
+            if funding_rate:
+                _logger.info(
+                    f"Fetched {len(funding_rate)} funding rate history records for {self.market_futures}")
+                return funding_rate
+            else:
+                _logger.info(f"No funding rate history found for {self.market_futures}")
+                return None
+        except Exception as e:
+            _logger.error(f"Error fetching funding rate history: {str(e)}")
+            return None
+
     def get_funding_rate_history(self):
         try:
             funding_rate_history = self._exchange.fetch_funding_rate_history(symbol=self.market_futures)

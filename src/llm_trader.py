@@ -129,17 +129,15 @@ class LmmTrader:
         else:
             return None
 
-    def preprocess_funding_rate(self):
-        fr = self._exchange.get_funding_rate_history()  # TODO: resample timeframe when 1d
+    def get_current_funding_rate(self):
+        fr = self._exchange.get_funding_rate()
+        simple_fr_dict = {}
         if fr:
-            fr_df = pd.DataFrame(fr)
-            keep_cols = ['timestamp', 'fundingRate']
-            fr_df['fundingRate'] = round_series(fr_df['fundingRate'], 2)
-            fr_df = fr_df[keep_cols]
-            fr_df.set_index('timestamp', inplace=True)
-            return fr_df
-        else:
-            return None
+            simple_fr_dict['funding_rate'] = fr.get('fundingRate', 0)
+            simple_fr_dict['funding_timestamp'] = fr.get('fundingTimestamp', 0)
+            simple_fr_dict['previous_funding_rate'] = fr.get('previousFundingRate', None)
+            simple_fr_dict['previousFundingTimestamp'] = fr.get('previousFundingTimestamp', None)
+            return simple_fr_dict
 
     def get_ohcl_data(self):
         ohlc = self._exchange.fetch_ohlc(
@@ -219,7 +217,7 @@ class LmmTrader:
 
     def get_price_action_data(self):
         oi = self.preprocess_open_interest()
-        fr = self.preprocess_funding_rate()
+        fr = self.get_current_funding_rate()
         df = self.get_ohcl_data()
 
         self.last_close_price = df.iloc[-1]['C']
@@ -237,8 +235,9 @@ class LmmTrader:
         merged_df = df.copy()
         if oi is not None:
             merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
-        if fr is not None:
-            merged_df = pd.merge(merged_df, fr, how='outer', left_index=True, right_index=True)
+
+        # if fr is not None:
+        #     merged_df = pd.merge(merged_df, fr, how='outer', left_index=True, right_index=True)
 
         merged_df = merged_df.drop(['datetime'], axis=1)
         df_tail = merged_df.tail(self.df_tail_for_agent)
@@ -246,6 +245,7 @@ class LmmTrader:
 
         price_data_dict = {
             'price_and_indicators': price_data_csv,
+            'funding_rate': fr,
             'fib_levels': fib_dict,
             'pivot_points': pp_dict
         }
@@ -278,22 +278,51 @@ class LmmTrader:
 
     @staticmethod
     def generate_functions():
-        # TODO: adjust this (nullable fields) and prompt for this agent to use function call
         return [
             {
                 "name": "trading_decision",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string"},
-                        "amount": {"type": "number"},
-                        "entry_price": {"type": "number"},
-                        "order_id": {"type": "string"},
-                        "order_type": {"type": "string"},
-                        "rationale": {"type": "string"},
-                        "stop_loss": {"type": "number"},
-                        "take_profit": {"type": "number"}
-                    }
+                        "action": {
+                            "type": "string",
+                            "enum": ["long", "short", "close", "cancel", "hold"],
+                            "description": "The trading action to perform."
+                        },
+                        "order_type": {
+                            "type": "string",
+                            "enum": ["limit", "market"],
+                            "description": "The type of order to place. Required for 'long' or 'short'."
+                        },
+                        "amount": {
+                            "type": ["number", "null"],
+                            "description": "The amount for the position or order."
+                        },
+                        "entry_price": {
+                            "type": ["number", "null"],
+                            "description": "The price at which to enter the trade "
+                                           "(only required if order_type is 'limit')."
+                        },
+                        "stop_loss": {
+                            "type": ["number", "null"],
+                            "description": "The stop-loss price level."
+                        },
+                        "take_profit": {
+                            "type": ["number", "null"],
+                            "description": "The take-profit price level."
+                        },
+                        "order_id": {
+                            "type": ["string", "null"],
+                            "description": "The ID of the order to cancel (only required for 'cancel' action)."
+                        },
+                        "rationale": {
+                            "type": "string",
+                            "description": "Explanation of the decision based on price action, trend, "
+                                           "indicators, open interest, funding rate, and exchange settings."
+                        }
+                    },
+                    "required": ["action", "rationale"],
+                    "description": "Defines the parameters for a trading decision."
                 }
             }
         ]
@@ -328,24 +357,20 @@ class LmmTrader:
                                          stop_loss=agent_action.stop_loss,
                                          take_profit=agent_action.take_profit)
             msg = f"Agent entered position in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
-            _logger.info(msg)
-            _notifier.info(msg, echo='here')
 
         elif agent_action.action == 'close':
             order = self._exchange.order(agent_action.action, agent_action.amount)
             msg = f"Agent closed position in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
-            _logger.info(msg)
-            _notifier.info(msg, echo='here')
 
         elif agent_action.action == 'cancel':
             order = self._exchange.cancel_order(agent_action.order_id)
             msg = f"Agent canceled order in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
-            _logger.info(msg)
-            _notifier.info(msg, echo='here')
+
         else:
             msg = f"Agent holds in strategy {self.strategy_settings.id}:\n {asdict(agent_action)}"
-            _logger.info(msg)
-            _notifier.info(msg)
+
+        _logger.info(msg)
+        _notifier.info(msg)
 
         self.save_agent_action(agent_action, order)
 
