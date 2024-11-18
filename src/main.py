@@ -93,13 +93,15 @@ def llm_trade(exchange_id):
         strategy_settings = load_strategy_settings(exchange_id, 'llm_trader')
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
-        # Using the factory to get the correct exchange adapter
-        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
-
         _logger.info(f"Initialising LLM trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
-        exchange_adapter.load_exchange()
 
         for strategy in strategy_settings:
+            # Using the factory to get the correct exchange adapter
+            exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
+                exchange_id, sub_account_id=strategy.sub_account_id
+            )
+            exchange_adapter.load_exchange()
+
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
             trader = LmmTrader(exchange_adapter, strategy)

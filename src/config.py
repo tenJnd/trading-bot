@@ -20,6 +20,8 @@ MEXC_API_SECRET = os.environ.get('MEXC_API_SECRET')
 
 BYBIT_API_KEY = os.environ.get('BYBIT_API_KEY')
 BYBIT_API_SECRET = os.environ.get('BYBIT_API_SECRET')
+BYBIT_API_KEY_SUB1 = os.environ.get('BYBIT_API_KEY_SUB1')
+BYBIT_API_SECRET_SUB1 = os.environ.get('BYBIT_API_SECRET_SUB1')
 
 LEVERAGE = os.environ.get('LEVERAGE', 1)
 
@@ -80,9 +82,9 @@ BYBIT_CONFIG_PROD = {
     },
     'base_currency': 'USDT',
     'sub_accounts': {
-        'sub_account_1': {
-            'apiKey': '',
-            'secret': ''
+        'subAccount1': {
+            'apiKey': BYBIT_API_KEY_SUB1,
+            'secret': BYBIT_API_SECRET_SUB1
         }
     }
 }
