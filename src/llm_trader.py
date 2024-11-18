@@ -63,7 +63,7 @@ class LmmTrader:
             self.price_action_data = self.get_price_action_data()
             self.opened_positions = self.get_open_positions_data()
             self.opened_orders = self.get_open_orders_data()
-            self.trade_history = self.get_trade_history_data()
+            self.trade_history = self.get_last_trade_data()
             self.last_agent_output = self.get_last_agent_output()
             self.exchange_settings = self.get_exchange_settings()
 
@@ -203,7 +203,7 @@ class LmmTrader:
         else:
             return None
 
-    def get_trade_history_data(self):
+    def get_last_trade_data(self):
         th = self._exchange.get_trade_history()
         if not th:
             return None
@@ -360,7 +360,10 @@ class LmmTrader:
 
         elif agent_action.action == 'close':
             order = self._exchange.order(agent_action.action, agent_action.amount)
-            msg = f"Agent closed position in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
+            last_trade = self.get_last_trade_data()
+            msg = (f"Agent closed position in strategy:"
+                   f" {self.strategy_settings.id}:\n {asdict(agent_action)}\n"
+                   f"Trade results: {last_trade}")
 
         elif agent_action.action == 'cancel':
             order = self._exchange.cancel_order(agent_action.order_id)
