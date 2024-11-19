@@ -29,6 +29,8 @@ def retry_if_network_error(exception):
 
 
 class BaseExchangeAdapter:
+    global_params = {'leverage': LEVERAGE}
+
     def __init__(self, exchange_id: str, sub_account_id: str = None, market: str = None):
         self.exchange_id = exchange_id
         exchange_class = getattr(ccxt, self.exchange_id)
