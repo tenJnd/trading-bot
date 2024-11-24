@@ -23,11 +23,11 @@ from config import (TRADE_RISK_ALLOCATION,
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.config import LOOKER_URL, MIN_POSITION_THRESHOLD
-from src.llm_trader import LmmTurtleValidator
+from src.llm_trader import LmmTurtlePyramidValidator, LmmTurtleEntryValidator
 from src.model import trader_database
 from src.model.turtle_model import Order, DepositsWithdrawals
 from src.schemas.turtle_schema import OrderSchema
-from src.utils.utils import save_json_to_file, get_adjusted_amount, calculate_atr
+from src.utils.utils import save_json_to_file, get_adjusted_amount, calculate_atr, turtle_trading_signals_adjusted
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(SLACK_URL, __name__, __name__)
@@ -97,41 +97,6 @@ class CurrMarketConditions:
         return self.atr_20 / self.atr_50
 
 
-def turtle_trading_signals_adjusted(df):
-    """
-    Identify Turtle Trading entry and exit signals for both long and short positions, adjusting for early rows.
-
-    Parameters:
-    - df: pandas DataFrame with at least 'High' and 'Low' columns.
-
-    Adds columns to df:
-    - 'high_20': Highest high over the previous 20 days, adjusting for early rows.
-    - 'low_20': Lowest low over the previous 20 days, adjusting for early rows.
-    - 'high_10': Highest high over the previous 10 days, adjusting for early rows.
-    - 'low_10': Lowest low over the previous 10 days, adjusting for early rows.
-    - 'long_entry': Signal for entering a long position.
-    - 'long_exit': Signal for exiting a long position.
-    - 'short_entry': Signal for entering a short position.
-    - 'short_exit': Signal for exiting a short position.
-    """
-    df['datetime'] = pd.to_datetime(df['timeframe'], unit='ms')
-    # Calculate rolling max/min for the required windows with min_periods=1
-    df['high_20'] = df['H'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).max()
-    df['low_20'] = df['L'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).min()
-    df['high_10'] = df['H'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).max()
-    df['low_10'] = df['L'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).min()
-
-    # Entry signals
-    df['long_entry'] = df['H'] > df['high_20'].shift(1)
-    df['short_entry'] = df['L'] < df['low_20'].shift(1)
-
-    # Exit signals
-    df['long_exit'] = df['L'] < df['low_10'].shift(1)
-    df['short_exit'] = df['H'] > df['high_10'].shift(1)
-
-    return df
-
-
 class TurtleTrader:
 
     def __init__(self,
@@ -147,6 +112,7 @@ class TurtleTrader:
         self.opened_positions = None
         self.last_opened_position: LastOpenedPosition = None
         self.curr_market_conditions: CurrMarketConditions = None
+        self.llm_validator = None
         self.minimal_entry_cost = MIN_POSITION_THRESHOLD
 
         self.get_opened_positions()
@@ -249,13 +215,12 @@ class TurtleTrader:
     def log_total_pl(self):
         pl: Dict[str, Any] = self.get_pl()
         msg = (
-                f'\n=== CLOSED ===\n' +
-                f'{self.get_ticker_exchange_string()} ' +
-                f"last trade P/L: {pl['last_closed_position_pl'][0]}$, {pl['last_closed_position_pl'][1]}%\n"
+                f"{self.get_ticker_exchange_string('closed')}" +
+                f"last trade P/L: {pl['last_closed_position_pl'][0]}$, "
+                f"{pl['last_closed_position_pl'][1]}%\n"
                 f"strategy P/L: {pl['strategy_pl']}$\n"
                 f"Total P/L: {pl['total_pl']}$, {pl['total_pl_percent']}%\n"
                 f"{LOOKER_URL}"
-            # f'Total balance: {round(self._exchange.total_balance, 0)}$'
         )
         _logger.info(msg)
         _notifier.info(msg, echo='here')
@@ -403,6 +368,7 @@ class TurtleTrader:
         order_object.exchange = self._exchange.exchange_id
         order_object.contract_size = self._exchange.contract_size
         order_object.strategy_id = self.strategy_settings.id
+        order_object.candle_timeframe = self.curr_market_conditions.timeframe
 
         if action == 'close':
             order_object.closed_positions = self.opened_positions_ids
@@ -506,9 +472,12 @@ class TurtleTrader:
             self.update_closed_orders()
             self.log_total_pl()
 
-    def create_llm_validator(self) -> LmmTurtleValidator:
-        validator = LmmTurtleValidator(self._exchange, self.strategy_settings, self._database)
-        validator.expand_llm_input_dict(self.last_opened_position.stop_loss_price)
+    def create_llm_validator(self) -> LmmTurtlePyramidValidator:
+        validator = self.llm_validator(self._exchange, self.strategy_settings, self._database)
+        if self.last_opened_position:
+            validator.expand_llm_input_dict(self.last_opened_position.stop_loss_price)
+        else:
+            validator.expand_llm_input_dict()
         return validator
 
     def process_agent_action(self, agent_action, side):
@@ -516,6 +485,11 @@ class TurtleTrader:
         if agent_action.action == 'add_position':
             msg = (self.get_ticker_exchange_string('lmm add position') +
                    f"Lmm validator is adding to position\n"
+                   f"rationale: {agent_action.rationale}")
+            self.entry_position(side)
+        elif agent_action.action == 'enter_position':
+            msg = (self.get_ticker_exchange_string('lmm enter position') +
+                   f"Lmm validator is entering the position\n"
                    f"rationale: {agent_action.rationale}")
             self.entry_position(side)
         elif agent_action.action == 'set_stop_loss':
@@ -537,7 +511,7 @@ class TurtleTrader:
         _logger.info(msg)
         _notifier.info(msg, echo='here')
 
-    def pyramid_entry_w_validation(self, side):
+    def entry_w_validation(self, side):
         validator = self.create_llm_validator()
 
         # check if validator have run in VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
@@ -548,7 +522,7 @@ class TurtleTrader:
                    f"{VALIDATOR_REPEATED_CALL_TIME_TEST_MIN} minutes.\n"
                    "We will wait for another run..")
             _logger.info(msg)
-            # _notifier.info(msg)
+            _notifier.info(msg)
         else:
             try:
                 agent_action = validator.call_agent()
@@ -563,6 +537,7 @@ class TurtleTrader:
 
     def process_opened_position(self):
         _logger.info('Processing opened positions')
+        self.llm_validator = LmmTurtlePyramidValidator
 
         curr_mar_cond = self.curr_market_conditions
         last_stop_loss = self.last_opened_position.stop_loss_price
@@ -585,7 +560,7 @@ class TurtleTrader:
             # add to position -> pyramiding
             elif curr_mar_cond.C >= long_pyramid_price and not pyramid_stop:
                 _logger.info(f'Adding to long position -> check w LLM validator')
-                self.pyramid_entry_w_validation('long')
+                self.entry_w_validation('long')
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
@@ -601,22 +576,23 @@ class TurtleTrader:
             # add to position -> pyramiding
             elif curr_mar_cond.C <= short_pyramid_price and not pyramid_stop:
                 _logger.info(f'Adding to short position -> check w LLM validator')
-                self.pyramid_entry_w_validation('short')
+                self.entry_w_validation('short')
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
 
     def trade(self):
         if self.opened_positions is None:
+            self.llm_validator = LmmTurtleEntryValidator
             curr_cond = self.curr_market_conditions
             # entry long
             if curr_cond.long_entry and not curr_cond.long_exit:  # safety
                 _logger.info('Long cond is met -> entering long position')
-                self.entry_position('long')
+                self.entry_w_validation('long')
             # entry short
             elif curr_cond.short_entry and not curr_cond.short_exit:  # safety
                 _logger.info('Short cond is met -> entering short position')
-                self.entry_position('short')
+                self.entry_w_validation('short')
             # do nothing
             else:
                 _logger.info('No opened positions and no condition is met for entry -> SKIPPING')

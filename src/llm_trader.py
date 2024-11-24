@@ -16,11 +16,12 @@ from model.turtle_model import StrategySettings
 from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
-from src.prompts import llm_trader_prompt, llm_turtle_validator
+from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt
 from src.utils.utils import (calculate_sma, round_series,
                              calculate_auto_fibonacci,
                              calculate_pivot_points, shorten_large_numbers,
-                             dynamic_safe_round, calculate_indicators_for_llm_trader)
+                             dynamic_safe_round, calculate_indicators_for_llm_trader,
+                             calculate_indicators_for_llm_entry_validator)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -43,7 +44,8 @@ class AgentAction:
 
 
 class LmmTrader:
-    SYSTEM_PROMPT = llm_trader_prompt
+    agent_name = 'llm_trader'
+    system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     df_tail_for_agent = 20
 
@@ -335,7 +337,7 @@ class LmmTrader:
         _logger.info(f"Calling the agent...")
 
         response = llm_client.call_with_functions(
-            system_prompt=self.SYSTEM_PROMPT,
+            system_prompt=self.system_prompt,
             user_prompt=self.llm_input_data,
             functions=functions
         )
@@ -392,15 +394,17 @@ class LmmTrader:
                 agent_output=asdict(agent_action),
                 strategy_id=self.strategy_settings.id,
                 order=order,
-                candle_timestamp=int(self.last_candle_timestamp)
+                candle_timestamp=int(self.last_candle_timestamp),
+                agent_name=self.agent_name
             )
             session.add(action_object)
 
         _logger.info("agent action saved")
 
 
-class LmmTurtleValidator(LmmTrader):
-    SYSTEM_PROMPT = llm_turtle_validator
+class LmmTurtlePyramidValidator(LmmTrader):
+    agent_name = 'lmm_turtle_pyramid_validator'
+    system_prompt = turtle_pyramid_validator_prompt
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -424,12 +428,12 @@ class LmmTurtleValidator(LmmTrader):
         return {
             'symbol': self._exchange.market_futures,
             'price_data': self.price_action_data,
-            'opened_positions': self.opened_positions,
+            'opened_positions': self.opened_positions
         }
 
-    def expand_llm_input_dict(self, last_open_position):
-        if self.last_agent_output:
-            self.opened_positions['stopLossPrice'] = last_open_position
+    def expand_llm_input_dict(self, last_open_position_stop_loss=None):
+        if self.last_agent_output and self.opened_positions:
+            self.opened_positions['stopLossPrice'] = last_open_position_stop_loss
         self.llm_input_data = str(self.llm_input_data)
 
     @staticmethod
@@ -443,7 +447,7 @@ class LmmTurtleValidator(LmmTrader):
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["add_position", "wait", "set_stop_loss"]
+                            "enum": ["add_position", "hold", "set_stop_loss"]
                         },
                         "rationale": {"type": "string"},
                         "stop_loss": {"type": "number", "nullable": True}
@@ -462,3 +466,46 @@ class LmmTurtleValidator(LmmTrader):
         ao['agent_output'] = {k: v for k, v in agent_action_dict.items()
                               if k in ['action', 'rationale', 'stop_loss']}
         return ao
+
+
+class LmmTurtleEntryValidator(LmmTurtlePyramidValidator):
+    agent_name = 'lmm_turtle_entry_validator'
+    system_prompt = turtle_pyramid_validator_prompt
+
+    def __init__(self,
+                 exchange: BaseExchangeAdapter,
+                 strategy_settings: StrategySettings = None,
+                 db: PostgresqlAdapter = None,
+                 load_data=True,
+                 ):
+        super().__init__(exchange, strategy_settings, db, load_data)
+
+    @staticmethod
+    def _calculate_indicators_for_llm_trader(df):
+        return calculate_indicators_for_llm_entry_validator(df)
+
+    def create_llm_input_dict(self):
+        return {
+            'symbol': self._exchange.market_futures,
+            'price_data': self.price_action_data
+        }
+
+    @staticmethod
+    def generate_functions():
+        return [
+            {
+                "name": "trading_decision",
+                "description": "Provide a trading decision based on market indicators.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["enter_position", "hold"]
+                        },
+                        "rationale": {"type": "string"},
+                    },
+                    "required": ["action", "rationale"]
+                }
+            }
+        ]

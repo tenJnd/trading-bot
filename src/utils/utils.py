@@ -9,7 +9,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from src.config import TRADING_DATA_DIR, ATR_PERIOD
+from src.config import TRADING_DATA_DIR, ATR_PERIOD, TURTLE_ENTRY_DAYS, TURTLE_EXIT_DAYS
 from src.model import trader_database
 from src.model.turtle_model import StrategySettings
 from src.schemas.turtle_schema import OrderSchema
@@ -121,6 +121,41 @@ def round_series(values, precision: int = 2):
         List[float]: A list of rounded values.
     """
     return [dynamic_safe_round(val, precision) for val in values]
+
+
+def turtle_trading_signals_adjusted(df):
+    """
+    Identify Turtle Trading entry and exit signals for both long and short positions, adjusting for early rows.
+
+    Parameters:
+    - df: pandas DataFrame with at least 'High' and 'Low' columns.
+
+    Adds columns to df:
+    - 'high_20': Highest high over the previous 20 days, adjusting for early rows.
+    - 'low_20': Lowest low over the previous 20 days, adjusting for early rows.
+    - 'high_10': Highest high over the previous 10 days, adjusting for early rows.
+    - 'low_10': Lowest low over the previous 10 days, adjusting for early rows.
+    - 'long_entry': Signal for entering a long position.
+    - 'long_exit': Signal for exiting a long position.
+    - 'short_entry': Signal for entering a short position.
+    - 'short_exit': Signal for exiting a short position.
+    """
+    # df['datetime'] = pd.to_datetime(df['timeframe'], unit='ms')
+    # Calculate rolling max/min for the required windows with min_periods=1
+    df['high_20'] = df['H'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).max()
+    df['low_20'] = df['L'].rolling(window=TURTLE_ENTRY_DAYS, min_periods=1).min()
+    df['high_10'] = df['H'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).max()
+    df['low_10'] = df['L'].rolling(window=TURTLE_EXIT_DAYS, min_periods=1).min()
+
+    # Entry signals
+    df['long_entry'] = df['H'] > df['high_20'].shift(1)
+    df['short_entry'] = df['L'] < df['low_20'].shift(1)
+
+    # Exit signals
+    df['long_exit'] = df['L'] < df['low_10'].shift(1)
+    df['short_exit'] = df['H'] > df['high_10'].shift(1)
+
+    return df
 
 
 def calculate_sma(df, period=20, column='C'):
@@ -372,6 +407,12 @@ def calculate_indicators_for_llm_trader(df):
     df['adx_20'] = calculate_adx(df, n_periods=20)
     df['obv'] = round_series(calculate_obv(df), 0)
     df['obv_sma_20'] = round_series(calculate_sma(df, period=20, column='obv'), 0)
+    return df
+
+
+def calculate_indicators_for_llm_entry_validator(df):
+    df = turtle_trading_signals_adjusted(df)
+    df = calculate_indicators_for_llm_trader(df)
     return df
 
 
