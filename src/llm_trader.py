@@ -405,6 +405,7 @@ class LmmTrader:
 class LmmTurtlePyramidValidator(LmmTrader):
     agent_name = 'lmm_turtle_pyramid_validator'
     system_prompt = turtle_pyramid_validator_prompt
+    df_tail_for_agent = 10
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -471,6 +472,7 @@ class LmmTurtlePyramidValidator(LmmTrader):
 class LmmTurtleEntryValidator(LmmTurtlePyramidValidator):
     agent_name = 'lmm_turtle_entry_validator'
     system_prompt = turtle_pyramid_validator_prompt
+    df_tail_for_agent = 10
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,

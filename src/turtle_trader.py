@@ -75,10 +75,6 @@ class CurrMarketConditions:
     datetime: str
     atr_20: float
     atr_50: float
-    high_20: float
-    low_20: float
-    high_10: float
-    low_10: float
     long_entry: bool
     short_entry: bool
     long_exit: bool
