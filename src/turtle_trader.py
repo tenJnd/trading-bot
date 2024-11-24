@@ -15,8 +15,6 @@ from sqlalchemy.exc import OperationalError, TimeoutError
 from config import (TRADE_RISK_ALLOCATION,
                     MAX_ONE_ASSET_RISK_ALLOCATION,
                     ATR_PERIOD,
-                    TURTLE_ENTRY_DAYS,
-                    TURTLE_EXIT_DAYS,
                     SLACK_URL,
                     VALIDATOR_REPEATED_CALL_TIME_TEST_MIN,
                     ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD)
@@ -112,11 +110,13 @@ class TurtleTrader:
         self.opened_positions = None
         self.last_opened_position: LastOpenedPosition = None
         self.curr_market_conditions: CurrMarketConditions = None
+        self.last_closed_timeframe = None
         self.llm_validator = None
         self.minimal_entry_cost = MIN_POSITION_THRESHOLD
 
         self.get_opened_positions()
         self.get_curr_market_conditions(testing_file_path)
+        self.get_last_closed_timeframe()
 
     @property
     def n_of_opened_positions(self):
@@ -169,6 +169,24 @@ class TurtleTrader:
             self.opened_positions = df
             last_opened_position = df.iloc[-1].to_dict()
             self.last_opened_position = LastOpenedPosition(**last_opened_position)
+
+    @retry(retry_on_exception=retry_if_sqlalchemy_transient_error,
+           stop_max_attempt_number=5,
+           wait_exponential_multiplier=2000)
+    def get_last_closed_timeframe(self):
+        _logger.info('Getting last candle timeframe')
+
+        with self._database.get_session() as session:
+            last_candle_timeframe = session.query(
+                Order.candle_timeframe
+            ).filter(
+                Order.position_status == 'closed',
+                Order.strategy_id == self.strategy_settings.id
+            ).order_by(
+                Order.timestamp.desc()
+            ).first()
+
+        self.last_closed_timeframe = last_candle_timeframe[0]
 
     @retry(retry_on_exception=retry_if_sqlalchemy_transient_error,
            stop_max_attempt_number=5,
@@ -582,6 +600,11 @@ class TurtleTrader:
                              '-> no condition for opened position is met')
 
     def trade(self):
+        if self.last_closed_timeframe:
+            if self.last_closed_timeframe == self.curr_market_conditions.timeframe:
+                _logger.info('Timeframe is the same as the last closed position -> SKIPPING')
+                return
+
         if self.opened_positions is None:
             self.llm_validator = LmmTurtleEntryValidator
             curr_cond = self.curr_market_conditions
