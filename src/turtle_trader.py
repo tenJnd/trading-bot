@@ -599,27 +599,30 @@ class TurtleTrader:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
 
-    def trade(self):
-        if self.last_closed_timeframe:
-            if self.last_closed_timeframe == self.curr_market_conditions.timeframe:
-                _logger.info('Timeframe is the same as the last closed position -> SKIPPING')
-                return
+    def process_no_positions(self):
+        self.llm_validator = LmmTurtleEntryValidator
+        curr_cond = self.curr_market_conditions
+        # entry long
+        if curr_cond.long_entry and not curr_cond.long_exit:  # safety
+            _logger.info('Long cond is met -> entering long position')
+            self.entry_w_validation('long')
+        # entry short
+        elif curr_cond.short_entry and not curr_cond.short_exit:  # safety
+            _logger.info('Short cond is met -> entering short position')
+            self.entry_w_validation('short')
+        # do nothing
+        else:
+            _logger.info('No opened positions and no condition is met for entry -> SKIPPING')
 
+    def trade(self):
         if self.opened_positions is None:
-            self.llm_validator = LmmTurtleEntryValidator
-            curr_cond = self.curr_market_conditions
-            # entry long
-            if curr_cond.long_entry and not curr_cond.long_exit:  # safety
-                _logger.info('Long cond is met -> entering long position')
-                self.entry_w_validation('long')
-            # entry short
-            elif curr_cond.short_entry and not curr_cond.short_exit:  # safety
-                _logger.info('Short cond is met -> entering short position')
-                self.entry_w_validation('short')
-            # do nothing
-            else:
-                _logger.info('No opened positions and no condition is met for entry -> SKIPPING')
-        # work with opened position
+            # do not trade the same candle timeframe as last closed trade
+            if self.last_closed_timeframe:
+                if self.last_closed_timeframe == self.curr_market_conditions.timeframe:
+                    _logger.info('Timeframe is the same as the last closed position -> SKIPPING')
+                    return
+
+            self.process_no_positions()
         else:
             self.process_opened_position()
 
