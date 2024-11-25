@@ -16,7 +16,7 @@ from model.turtle_model import StrategySettings
 from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
-from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt
+from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
 from src.utils.utils import (calculate_sma, round_series,
                              calculate_auto_fibonacci,
                              calculate_pivot_points, shorten_large_numbers,
@@ -471,7 +471,7 @@ class LmmTurtlePyramidValidator(LmmTrader):
 
 class LmmTurtleEntryValidator(LmmTurtlePyramidValidator):
     agent_name = 'lmm_turtle_entry_validator'
-    system_prompt = turtle_pyramid_validator_prompt
+    system_prompt = turtle_entry_validator_prompt
     df_tail_for_agent = 10
 
     def __init__(self,
