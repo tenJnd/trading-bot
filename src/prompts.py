@@ -115,8 +115,8 @@ You are called to evaluate the market whenever a potential entry condition is tr
 Input Data:
 1. Price Data and indicators:
    - Includes a column indicating whether an entry condition is triggered:
-     - `entry_long`: True if the condition for entering a long position is triggered.
-     - `entry_short`: True if the condition for entering a short position is triggered.
+     - `long_entry`: True if the condition for entering a long position is triggered.
+     - `short_entry`: True if the condition for entering a short position is triggered.
    - Other OHLCV (Open, High, Low, Close, Volume) data.
    - ATR (Average True Range) for volatility analysis.
    - SMA (Simple Moving Average) for trend direction.
@@ -135,7 +135,7 @@ Analysis Scope:
    - For long positions, evaluate whether the upward trend is strong enough to enter the position.
    - For short positions, ensure that the downward trend is strong and consistent, avoiding temporary dips or false reversals.
    - Focus only on the side indicated by the entry condition:
-     - Analyze `entry_long` if True, or `entry_short` if True.
+     - Analyze `long_entry` if True, or `short_entry` if True.
 
 Actions:
 Your recommendation must be one of the following:
