@@ -536,7 +536,7 @@ class TurtleTrader:
                    f"{VALIDATOR_REPEATED_CALL_TIME_TEST_MIN} minutes.\n"
                    "We will wait for another run..")
             _logger.info(msg)
-            _notifier.info(msg)
+            # _notifier.info(msg)
         else:
             try:
                 agent_action = validator.call_agent()
