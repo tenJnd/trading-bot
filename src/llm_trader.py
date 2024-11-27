@@ -196,7 +196,6 @@ class LmmTrader:
                     'type': order.get('type', None),
                     'timestamp': order.get('timestamp', None),
                     'timeInForce': order.get('timeInForce', None),
-                    'reduceOnly': order.get('reduceOnly', None),
                     'stopLossPrice': order.get('stopLossPrice', None),
                     'takeProfitPrice': order.get('takeProfitPrice', None)
                 })
