@@ -79,6 +79,13 @@ class LmmTrader:
                            ):
         return cls(exchange=exchange, strategy_settings=strategy_settings, db=db, load_data=False)
 
+    def get_timing_info(self, last_candle_timestamp):
+        return {
+            'candle_timeframe': self.strategy_settings.timeframe,
+            'candle_timestamp': last_candle_timestamp,
+            'current_timestamp': int(datetime.now().timestamp()),
+        }
+
     def get_last_agent_output(self):
         with self._database.session_manager() as session:
             last_agent_action = (
@@ -244,7 +251,10 @@ class LmmTrader:
         df_tail = merged_df.tail(self.df_tail_for_agent)
         price_data_csv = df_tail.to_csv()
 
+        timing_data = self.get_timing_info(self.last_candle_timestamp)
+
         price_data_dict = {
+            'timing_info': timing_data,
             'price_and_indicators': price_data_csv,
             'funding_rate': fr,
             'fib_levels': fib_dict,
