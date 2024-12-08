@@ -350,6 +350,7 @@ class LmmTrader:
             user_prompt=self.llm_input_data,
             functions=functions
         )
+        _logger.info(f'response: {response}')
         parsed_output = response.choices[0].message.function_call.arguments
         structured_data = json.loads(parsed_output)
         _logger.info(f"agent call success")
