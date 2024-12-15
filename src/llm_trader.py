@@ -21,10 +21,20 @@ from src.utils.utils import (calculate_sma, round_series,
                              calculate_auto_fibonacci,
                              calculate_pivot_points, shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
-                             calculate_indicators_for_llm_entry_validator)
+                             calculate_indicators_for_llm_entry_validator, StrategySettingsModel)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
+
+
+class TraderModel(model_config.ModelConfig):
+    MODEL = 'gpt-4'
+    MAX_TOKENS = 2000
+    CONTEXT_WINDOW = 8192
+    TEMPERATURE = 0.5  # Keep outputs deterministic for scoring and ranking
+    RESPONSE_TOKENS = 1500  # Ensure response fits within limits
+    FREQUENCY_PENALTY = 0.0  # Avoid repetition in rationale
+    PRESENCE_PENALTY = 0.5  # Encourage new ideas or highlighting unique patterns
 
 
 class ConditionVerificationError(Exception):
@@ -43,7 +53,7 @@ class AgentAction:
     take_profit: float = None
 
 
-class LmmTrader:
+class LlmTrader:
     agent_name = 'llm_trader'
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
@@ -51,7 +61,7 @@ class LmmTrader:
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
-                 strategy_settings: StrategySettings = None,
+                 strategy_settings: StrategySettingsModel = None,
                  db: PostgresqlAdapter = None,
                  load_data=True,
                  ):
@@ -74,7 +84,7 @@ class LmmTrader:
     @classmethod
     def init_just_exchange(cls,
                            exchange: BaseExchangeAdapter,
-                           strategy_settings: StrategySettings = None,
+                           strategy_settings: StrategySettingsModel = None,
                            db: PostgresqlAdapter = None,
                            ):
         return cls(exchange=exchange, strategy_settings=strategy_settings, db=db, load_data=False)
@@ -339,7 +349,7 @@ class LmmTrader:
         ]
 
     def call_agent(self):
-        config = model_config.Gpt4Config
+        config = TraderModel
         _logger.info(f"creating agent using llm factory, config: {config.MODEL}")
         llm_client = LLMClientFactory.create_llm_client(config)
         functions = self.generate_functions()
@@ -412,7 +422,7 @@ class LmmTrader:
         _logger.info("agent action saved")
 
 
-class LmmTurtlePyramidValidator(LmmTrader):
+class LlmTurtlePyramidValidator(LlmTrader):
     agent_name = 'lmm_turtle_pyramid_validator'
     system_prompt = turtle_pyramid_validator_prompt
     df_tail_for_agent = 10
@@ -479,7 +489,7 @@ class LmmTurtlePyramidValidator(LmmTrader):
         return ao
 
 
-class LmmTurtleEntryValidator(LmmTurtlePyramidValidator):
+class LlmTurtleEntryValidator(LlmTurtlePyramidValidator):
     agent_name = 'lmm_turtle_entry_validator'
     system_prompt = turtle_entry_validator_prompt
     df_tail_for_agent = 10
