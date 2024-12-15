@@ -1,9 +1,11 @@
+import asyncio
 import logging
 import traceback
 from copy import deepcopy
 from datetime import datetime, timedelta
 
 import ccxt
+import ccxt.async_support as accxt  # Async CCXT
 import pandas as pd
 from retrying import retry
 from slack_bot.notifications import SlackNotifier
@@ -135,7 +137,10 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def fetch_ohlc(self, days, timeframe: str = '4h', limit=500):
+    def fetch_ohlc(self, ticker=None, days=100, timeframe: str = '4h', limit=500):
+        if not ticker:
+            ticker = self.market_futures
+
         n_days_ago = datetime.now() - timedelta(days=days)
         since = int(n_days_ago.timestamp() * 1000)
 
@@ -147,7 +152,7 @@ class BaseExchangeAdapter:
 
         while since < end_time:
             # Fetch candles from the exchange with a limit on the number of records
-            candles = self._exchange.fetchOHLCV(self.market_futures, timeframe=timeframe, since=since, limit=limit)
+            candles = self._exchange.fetchOHLCV(ticker, timeframe=timeframe, since=since, limit=limit)
 
             # If no more candles are returned, break the loop
             if not candles:
@@ -290,6 +295,13 @@ class BaseExchangeAdapter:
             open_position = open_positions[0]
             self._open_position = open_position
 
+        return open_positions
+
+    def get_open_positions(self):
+        """
+        fetch open positions for the current market.
+        """
+        open_positions = self._exchange.fetch_positions()
         return open_positions
 
     @retry(retry_on_exception=retry_if_network_error,
@@ -549,6 +561,7 @@ class BaseExchangeAdapter:
             return position_order(side, amount, limit_price, stop_loss, take_profit)
         return position_order(amount)
 
+
 # class MexcExchange(BaseExchangeAdapter):
 #     def enter_position(self, side, amount):
 #         leverage = self.global_params.get('leverage', 1)
@@ -582,3 +595,66 @@ class BaseExchangeAdapter:
 #
 #         _logger.info(f"Order created on MEXC: {order}")
 #         return order
+
+
+class AsyncExchangeAdapter(BaseExchangeAdapter):
+    def __init__(self, exchange_id: str, sub_account_id: str = None, market: str = None):
+        super().__init__(exchange_id, sub_account_id, market)
+        exchange_class = getattr(accxt, self.exchange_id)
+        self._exchange = exchange_class(self._exchange_config)  # Replace with async exchange
+
+    async def load_exchange(self, force_refresh=True):
+        if force_refresh or not self._exchange.markets:
+            _logger.info(f"Loading markets on {self._exchange.id}")
+            self.markets = await self._exchange.load_markets(True)
+        _logger.info("Markets loaded successfully")
+
+    async def fetch_ohlc(self, ticker=None, days=100, timeframe: str = '4h', limit=500):
+        """
+        Asynchronously fetch OHLC data for a specific ticker.
+        """
+        if not ticker:
+            ticker = self.market_futures
+
+        n_days_ago = datetime.now() - timedelta(days=days)
+        since = int(n_days_ago.timestamp() * 1000)
+
+        all_candles = []
+        end_time = datetime.now().timestamp() * 1000
+
+        while since < end_time:
+            candles = await self._exchange.fetch_ohlcv(ticker, timeframe=timeframe, since=since, limit=limit)
+            if not candles:
+                break
+            all_candles.extend(candles)
+            since = candles[-1][0] + 1
+
+        if all_candles:
+            candles_df = pd.DataFrame(all_candles, columns=['time', 'O', 'H', 'L', 'C', 'V'])
+            candles_df['datetime'] = pd.to_datetime(candles_df['time'], unit='ms')
+            candles_df['ticker'] = ticker.split('/')[0]
+            return candles_df
+        return pd.DataFrame()
+
+    async def get_open_positions(self):
+        """
+        Asynchronously fetch open positions for the current market.
+        """
+        _logger.info("getting open positions")
+        open_positions = await self._exchange.fetch_positions()
+        return open_positions
+
+    async def async_fetch_ohlc(self, tickers, days=220, timeframe='1d', limit=500):
+        """
+        Fetch OHLC data and open positions for multiple tickers concurrently.
+        """
+        ohlc_tasks = [self.fetch_ohlc(ticker, days, timeframe, limit) for ticker in tickers]
+
+        ohlc_results = await asyncio.gather(asyncio.gather(*ohlc_tasks))
+        return ohlc_results
+
+    async def close(self):
+        """
+        Properly close the exchange connection.
+        """
+        await self._exchange.close()
