@@ -9,7 +9,8 @@ from slack_bot.notifications import SlackNotifier
 from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
-from src.llm_trader import LmmTrader
+from src.llm_trader import LlmTrader
+from src.ticker_picker import LlmTickerPicker
 from src.utils.turtle_back_test import turtle_back_test
 from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
@@ -89,11 +90,19 @@ def trade(exchange_id):
 @click.option('-exch', '--exchange_id', type=str, default='binance')
 def llm_trade(exchange_id):
     _logger.info("\n============== STARTING LLM TRADE SESSION ==============\n")
+    sub_acc = 'subAccount1'
     try:
         strategy_settings = load_strategy_settings(exchange_id, 'llm_trader')
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
         _logger.info(f"Initialising LLM trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
+
+        exchange_adapter = ExchangeFactory.get_async_exchange(
+            exchange_id, sub_account_id=sub_acc
+        )
+
+        ticker_picker = LlmTickerPicker(exchange_adapter, strategy_settings)
+        strategy_settings = ticker_picker.pick_tickers()
 
         for strategy in strategy_settings:
             # Using the factory to get the correct exchange adapter
@@ -104,7 +113,7 @@ def llm_trade(exchange_id):
 
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
-            trader = LmmTrader(exchange_adapter, strategy)
+            trader = LlmTrader(exchange_adapter, strategy)
             trader.trade()
 
     except Exception as e:
