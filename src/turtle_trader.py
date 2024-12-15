@@ -21,7 +21,7 @@ from config import (TRADE_RISK_ALLOCATION,
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.config import LOOKER_URL, MIN_POSITION_THRESHOLD
-from src.llm_trader import LmmTurtlePyramidValidator, LmmTurtleEntryValidator
+from src.llm_trader import LlmTurtlePyramidValidator, LlmTurtleEntryValidator
 from src.model import trader_database
 from src.model.turtle_model import Order, DepositsWithdrawals
 from src.schemas.turtle_schema import OrderSchema
@@ -486,7 +486,7 @@ class TurtleTrader:
             self.update_closed_orders()
             self.log_total_pl()
 
-    def create_llm_validator(self) -> LmmTurtlePyramidValidator:
+    def create_llm_validator(self) -> LlmTurtlePyramidValidator:
         validator = self.llm_validator(self._exchange, self.strategy_settings, self._database)
         if self.last_opened_position:
             validator.expand_llm_input_dict(self.last_opened_position.stop_loss_price)
@@ -551,7 +551,7 @@ class TurtleTrader:
 
     def process_opened_position(self):
         _logger.info('Processing opened positions')
-        self.llm_validator = LmmTurtlePyramidValidator
+        self.llm_validator = LlmTurtlePyramidValidator
 
         curr_mar_cond = self.curr_market_conditions
         last_stop_loss = self.last_opened_position.stop_loss_price
@@ -596,7 +596,7 @@ class TurtleTrader:
                              '-> no condition for opened position is met')
 
     def process_no_positions(self):
-        self.llm_validator = LmmTurtleEntryValidator
+        self.llm_validator = LlmTurtleEntryValidator
         curr_cond = self.curr_market_conditions
         # entry long
         if curr_cond.long_entry and not curr_cond.long_exit:  # safety
