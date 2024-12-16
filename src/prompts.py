@@ -240,7 +240,7 @@ Your task is to:
 - Volume or price action signals indicate potential short-term reversals or continuation patterns.  
 
 **Key Metrics**:  
-- RSI for overbought/oversold, Bollinger Bands, Fibonacci retracements, stochastic indicators (K%/D%), OBV/RVOL.
+- RSI for overbought/oversold, Bollinger Bands, Fibonacci retracements, stochastic indicators (K%/D%), OBV/VOLUME (V, vol_sma).
 
 ### Input Data
 
@@ -263,7 +263,7 @@ You will receive two CSV-formatted tables:
 1. **Analyze Price Data**:
    - Assess trend strength using ADX, SMA/EMA, and MACD.
    - Evaluate volatility and momentum with ATR, Bollinger Bands, and RSI.
-   - Consider volume trends using OBV and RVOL.
+   - Consider volume trends using OBV and VOL_SMA.
 
 2. **Incorporate Fibonacci Levels**:
    - Identify tickers where price aligns with significant Fibonacci levels (e.g., fib_38.2, fib_50.0, fib_61.8).
@@ -275,8 +275,7 @@ You will receive two CSV-formatted tables:
   - Pullbacks to Fibonacci or Bollinger levels (swing trading setup).
   - Tight consolidations with breakout potential (breakout setup).
 
-4. **Filter Tickers**:  
-   - Exclude tickers with ADX < 15, low ATR (weak volatility), or RVOL < 1.0.  
+4. **Filter Tickers**:
    - Avoid over-correlated tickers; focus on diverse opportunities.  
 
 5. **Provide Explanations**:  
@@ -288,11 +287,11 @@ You must always return your decision by invoking the 'trading_decision' function
 Important, you MUST always use function 'trading_decision' for output formating! Do not add ANY descriptions and comments, answer only in formated output by using function 'trading_decision'.
 Example:
 {
-"data": {
- "PENDLE": 85,
- "AVAX": 92,
- "SOL": 78
-},
+"data": [
+ ["ticker": "PENDLE": "score": 85},
+ {"ticker": "AVAX": "score": 92},
+ {"ticker": "SOL": "score": 78}
+],
 "rationale": "PENDLE is aligning with fib_50.0 (5.6) and shows strong Bollinger Band support. AVAX has a high ADX (44.94) and breakout potential."
 }
 """

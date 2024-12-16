@@ -144,11 +144,11 @@ class LlmTrader:
         oi = self._exchange.get_open_interest_hist(timeframe=self.strategy_settings.timeframe)
         if oi:
             oi_df = pd.DataFrame(oi)
-            keep_cols = ['timestamp', 'openInterestValue']
-            oi_df['openInterestValue'] = round_series(oi_df['openInterestValue'], 0)
+            keep_cols = ['timestamp', 'open_interest']
+            oi_df['open_interest'] = round_series(oi_df['openInterestValue'], 0)
             oi_df = oi_df[keep_cols]
-            oi_df['openInterest_sma_20'] = calculate_sma(oi_df, 20, column='openInterestValue')
-            oi_df['openInterest_sma_10'] = calculate_sma(oi_df, 10, column='openInterestValue')
+            oi_df['open_interest_sma_20'] = calculate_sma(oi_df, 20, column='open_interest')
+            oi_df['open_interest_sma_10'] = calculate_sma(oi_df, 10, column='open_interest')
             oi_df.set_index('timestamp', inplace=True)
             return oi_df
         else:
@@ -161,7 +161,7 @@ class LlmTrader:
             simple_fr_dict['funding_rate'] = fr.get('fundingRate', 0)
             simple_fr_dict['funding_timestamp'] = fr.get('fundingTimestamp', 0)
             simple_fr_dict['previous_funding_rate'] = fr.get('previousFundingRate', None)
-            simple_fr_dict['previousFundingTimestamp'] = fr.get('previousFundingTimestamp', None)
+            simple_fr_dict['previous_funding_timestamp'] = fr.get('previousFundingTimestamp', None)
             return simple_fr_dict
 
     def get_ohcl_data(self):
