@@ -53,6 +53,11 @@ class AgentAction:
     take_profit: float = None
     data: dict = None
 
+    def nice_print(self):
+        d = asdict(self)
+        return '\n'.join([f"{k}: {v}" for k, v in d.items() if v is not None])
+
+
 
 class LlmTrader:
     agent_name = 'llm_trader'
@@ -369,14 +374,10 @@ class LlmTrader:
         return self.agent_action_obj(**structured_data)
 
     def format_log(self, agent_action):
-        action = asdict(agent_action)
-        # Generate a formatted string for each key-value pair where the value is not None
-        action_n_string = '\n'.join([f"{k}: {v}" for k, v in action.items() if v is not None])
-
         # Combine the strategy settings with the action string, skipping None values in the log
         return (f"ticker: {self.strategy_settings.ticker}, "
                 f"strategy_id: {self.strategy_settings.id}\n"
-                f"{action_n_string}")
+                f"{agent_action.nice_print()}")
 
     def trade(self):
         self.check_constrains()
