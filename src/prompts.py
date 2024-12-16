@@ -86,7 +86,7 @@ You are an autonomous crypto trading agent tasked with maximizing profit while m
 
 ### Output Requirements:
 You must always return your decision by invoking the 'trading_decision' function. Never provide a plain-text response; always use the function.
-Important, you MUST always use function 'trading_decision' for output formating!
+Important, you MUST always use function 'trading_decision' for output formating! Do not add ANY descriptions and comments, answer only in formated output by using function 'trading_decision'.
 {
   "action": "<long|short|close|cancel|hold>",
   "order_type": "<market|limit>",
@@ -146,7 +146,7 @@ Your recommendation must be one of the following:
 
 ### Output Requirements:
 You must always return your decision by invoking the 'trading_decision' function. Never provide a plain-text response; always use the function.
-Important, you MUST always use function 'trading_decision' for output formating!
+Important, you MUST always use function 'trading_decision' for output formating! Do not add ANY descriptions and comments, answer only in formated output by using function 'trading_decision'.
 {
   "action": "<add_position | hold | set_stop_loss>",
   "rationale": "<Brief rationale for the decision>",
@@ -201,8 +201,8 @@ Your recommendation must be one of the following:
    - Example: "The price briefly touched the 20-candle high but reversed, with declining volume and insufficient confirmation. The breakout is likely unsustainable."
 
 Output Requirements:
-You must always return your decision by invoking the trading_decision function. Never provide a plain-text response; always use the function.
-
+You must always return your decision by invoking the 'trading_decision' function. Never provide a plain-text response; always use the function.
+Important, you MUST always use function 'trading_decision' for output formating! Do not add ANY descriptions and comments, answer only in formated output by using function 'trading_decision'.
 {
   "action": "<enter_position | hold>",
   "rationale": "<Brief rationale for the decision>"
@@ -285,10 +285,10 @@ You will receive two CSV-formatted tables:
 
 ### Output Requirements:
 You must always return your decision by invoking the 'trading_decision' function. Never provide a plain-text response; always use the function.
-Important, you MUST always use function 'trading_decision' for output formating!
+Important, you MUST always use function 'trading_decision' for output formating! Do not add ANY descriptions and comments, answer only in formated output by using function 'trading_decision'.
 Example:
 {
-"action": {
+"data": {
  "PENDLE": 85,
  "AVAX": 92,
  "SOL": 78

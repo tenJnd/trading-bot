@@ -25,17 +25,19 @@ class LlmTickerPicker(LlmTrader):
         super().__init__(exchange=exchange, load_data=False)
         self.strategies = strategies
         self.tickers_input = [f"{strategy.ticker}/USDT:USDT" for strategy in strategies]
-        self.open_strategies = []
+        self.open_strategies_tickers = []
 
         self.llm_input_data = self.create_llm_input_dict()
 
     async def async_get_tickers_data(self):
         _logger.info("async - fetching ohlc and open positions")
+        timeframe = self.strategies[0].timeframe
+        buffer_days = self.strategies[0].buffer_days
 
         await self._exchange.load_exchange()
 
         op = await self._exchange.get_open_positions()
-        tic = await self._exchange.async_fetch_ohlc(self.tickers_input)
+        tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
 
         await self._exchange.close()
         return tic, op
@@ -46,9 +48,8 @@ class LlmTickerPicker(LlmTrader):
         """
         _logger.info("Generating llm input")
         tickers_data, open_positions = asyncio.run(self.async_get_tickers_data())
-        open_tickers = [op['symbol'].split('/')[0] for op in open_positions]
-        _logger.info(f'Opened positions {open_tickers}')
-        self.open_strategies = [strategy for strategy in self.strategies if strategy.ticker in open_tickers]
+        self.open_strategies_tickers = [op['symbol'].split('/')[0] for op in open_positions]
+        _logger.info(f'Opened positions {self.open_strategies_tickers}')
 
         ticker_list = []
         fib_list = []
@@ -88,7 +89,7 @@ class LlmTickerPicker(LlmTrader):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {
+                        "data": {
                             "type": "array",
                             "items": {
                                 "type": "object",
@@ -108,7 +109,7 @@ class LlmTickerPicker(LlmTrader):
                             "description": "Explanation of why the selected tickers are promising, based on data analysis."
                         }
                     },
-                    "required": ["action", "rationale"]
+                    "required": ["data", "rationale"]
                 }
             }
         ]
@@ -116,23 +117,25 @@ class LlmTickerPicker(LlmTrader):
     def pick_tickers(self):
         _logger.info('Picking tradable tickers...')
         agent_action = self.call_agent()
+        agent_action.action = 'ticker_pick'
 
-        # Extract ticker and score from the list of dictionaries and sort them
-        sorted_tickers = sorted(
-            agent_action.action, key=lambda x: x['score'], reverse=True
-        )
+        # Extract ticker and score from the list of dictionaries and filter them based on score > 85
+        high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 90]
 
-        # Select top 2 tickers based on their score
-        top_tickers = sorted_tickers[:2]
-        _logger.info(f"Ticker picker selection: {top_tickers}\n"
+        _logger.info(f"Ticker picker selection based on high score: {high_score_tickers}\n"
                      f"rationale: {agent_action.rationale}")
 
-        # Filter strategies that are applicable to the top tickers
+        # Extract tickers for easier comparison
+        high_score_tickers_symbols = [ticker['ticker'] for ticker in high_score_tickers]
+
+        # Combine unique symbols from open strategies and high-score tickers
+        possible_symbols = set(self.open_strategies_tickers + high_score_tickers_symbols)
+
+        # Filter strategies that are applicable to the high score tickers
         possible_strategies = [
             strategy for strategy in self.strategies
-            if strategy.ticker in [ticker['ticker'] for ticker in top_tickers]
+            if strategy.ticker in possible_symbols
         ]
-        strategies_to_trade = possible_strategies + self.open_strategies
+        return possible_strategies
 
-        return strategies_to_trade
 

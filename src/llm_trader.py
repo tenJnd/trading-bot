@@ -51,6 +51,7 @@ class AgentAction:
     rationale: str = None
     stop_loss: float = None
     take_profit: float = None
+    data: dict = None
 
 
 class LlmTrader:
