@@ -90,18 +90,16 @@ def trade(exchange_id):
 @click.option('-exch', '--exchange_id', type=str, default='binance')
 def llm_trade(exchange_id):
     _logger.info("\n============== STARTING LLM TRADE SESSION ==============\n")
-    sub_acc = 'subAccount1'
     try:
         strategy_settings = load_strategy_settings(exchange_id, 'llm_trader')
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
-        _logger.info(f"Initialising LLM trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
+        _logger.info(f"Initialising LLM trader on {exchange_id}, "
+                     f"tickers: {[x.ticker for x in strategy_settings]}")
 
-        exchange_adapter = ExchangeFactory.get_async_exchange(
-            exchange_id, sub_account_id=sub_acc
-        )
-
-        ticker_picker = LlmTickerPicker(exchange_adapter, strategy_settings)
+        # TickerPicker
+        async_exchange_adapter = ExchangeFactory.get_async_exchange(exchange_id)
+        ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
         strategy_settings = ticker_picker.pick_tickers()
 
         for strategy in strategy_settings:
@@ -111,7 +109,8 @@ def llm_trade(exchange_id):
             )
             exchange_adapter.load_exchange()
 
-            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
+            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
+                         f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
             trader = LlmTrader(exchange_adapter, strategy)
             trader.trade()
