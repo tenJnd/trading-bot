@@ -381,7 +381,7 @@ class LlmTrader:
     def trade(self):
         self.check_constrains()
         agent_action = self.call_agent()
-        msg = self.formate_log(agent_action)
+        msg = self.format_log(agent_action)
 
         order = None
         if agent_action.action == 'long' or agent_action.action == 'short':
