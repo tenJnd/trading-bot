@@ -28,13 +28,13 @@ _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
 
 
 class TraderModel(model_config.ModelConfig):
-    MODEL = 'gpt-4'
+    MODEL = 'gpt-4o'
     MAX_TOKENS = 2000
     CONTEXT_WINDOW = 8192
-    TEMPERATURE = 0.5  # Keep outputs deterministic for scoring and ranking
+    TEMPERATURE = 0.3  # Keep outputs deterministic for scoring and ranking
     RESPONSE_TOKENS = 1500  # Ensure response fits within limits
     FREQUENCY_PENALTY = 0.0  # Avoid repetition in rationale
-    PRESENCE_PENALTY = 0.5  # Encourage new ideas or highlighting unique patterns
+    PRESENCE_PENALTY = 0.3  # Encourage new ideas or highlighting unique patterns
 
 
 class ConditionVerificationError(Exception):

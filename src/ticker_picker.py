@@ -84,41 +84,55 @@ class LlmTickerPicker(LlmTrader):
         return [
             {
                 "name": "trading_decision",
-                "description": "Pick tickers with the best trading potential and provide their scores.",
+                "description": "Analyzes crypto tickers and returns a decision on their trading potential.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
-                            "type": "object",  # This allows for a dictionary structure
-                            "additionalProperties": {
-                                "type": "integer",  # Scores are integers
-                                "description": "Score for the ticker based on trading potential (1-100)."
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "ticker": {"type": "string", "description": "The symbol of the crypto ticker."},
+                                    "score": {
+                                        "type": "integer",
+                                        "description": "Score for the ticker based on trading potential (1-100)."
+                                    }
+                                },
+                                "required": ["ticker", "score"]
                             },
-                            "description": "A dictionary of tickers and their scores."
+                            "description": "A list of tickers with their associated scores."
                         },
                         "rationale": {
                             "type": "string",
-                            "description": "Explanation of why the selected tickers were chosen."
-                        },
+                            "description": "Explanation of why the selected tickers are promising, based on data analysis."
+                        }
                     },
-                    "required": ["action", "rationale"]  # Both fields are required
+                    "required": ["action", "rationale"]
                 }
             }
         ]
 
     def pick_tickers(self):
-        _logger.info('Picking tradeable tickers...')
+        _logger.info('Picking tradable tickers...')
         agent_action = self.call_agent()
 
-        sorted_desc_values = dict(
-            sorted(agent_action.action.items(), key=lambda item: item[1], reverse=True)[:2]
+        # Extract ticker and score from the list of dictionaries and sort them
+        sorted_tickers = sorted(
+            agent_action.action, key=lambda x: x['score'], reverse=True
         )
-        _logger.info(f"Ticker picker selection: {sorted_desc_values}\n"
+
+        # Select top 2 tickers based on their score
+        top_tickers = sorted_tickers[:2]
+        _logger.info(f"Ticker picker selection: {top_tickers}\n"
                      f"rationale: {agent_action.rationale}")
 
+        # Filter strategies that are applicable to the top tickers
         possible_strategies = [
             strategy for strategy in self.strategies
-            if strategy.ticker in sorted_desc_values.keys()
+            if strategy.ticker in [ticker['ticker'] for ticker in top_tickers]
         ]
         strategies_to_trade = possible_strategies + self.open_strategies
+
         return strategies_to_trade
+
