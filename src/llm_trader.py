@@ -368,9 +368,20 @@ class LlmTrader:
 
         return self.agent_action_obj(**structured_data)
 
+    def format_log(self, agent_action):
+        action = asdict(agent_action)
+        # Generate a formatted string for each key-value pair where the value is not None
+        action_n_string = '\n'.join([f"{k}: {v}" for k, v in action.items() if v is not None])
+
+        # Combine the strategy settings with the action string, skipping None values in the log
+        return (f"ticker: {self.strategy_settings.ticker}, "
+                f"strategy_id: {self.strategy_settings.id}\n"
+                f"{action_n_string}")
+
     def trade(self):
         self.check_constrains()
         agent_action = self.call_agent()
+        msg = self.formate_log(agent_action)
 
         order = None
         if agent_action.action == 'long' or agent_action.action == 'short':
@@ -379,21 +390,14 @@ class LlmTrader:
                                          limit_price=agent_action.entry_price,
                                          stop_loss=agent_action.stop_loss,
                                          take_profit=agent_action.take_profit)
-            msg = f"Agent entered position in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
-
         elif agent_action.action == 'close':
             order = self._exchange.order(agent_action.action, agent_action.amount)
             last_trade = self.get_last_trade_data()
-            msg = (f"Agent closed position in strategy:"
-                   f" {self.strategy_settings.id}:\n {asdict(agent_action)}\n"
+            msg = (f"{self.formate_log(agent_action)}"
                    f"Trade results: {last_trade}")
 
         elif agent_action.action == 'cancel':
             order = self._exchange.cancel_order(agent_action.order_id)
-            msg = f"Agent canceled order in strategy: {self.strategy_settings.id}:\n {asdict(agent_action)}"
-
-        else:
-            msg = f"Agent holds in strategy {self.strategy_settings.id}:\n {asdict(agent_action)}"
 
         self.save_agent_action(agent_action, order)
 
