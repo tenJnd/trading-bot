@@ -10,7 +10,7 @@ from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
 from src.llm_trader import LlmTrader
-from src.ticker_picker import LlmTickerPicker
+from src.ticker_picker import LlmTickerPicker, TickerPicker
 from src.utils.turtle_back_test import turtle_back_test
 from src.utils.utils import load_strategy_settings
 from turtle_trader import TurtleTrader
@@ -67,13 +67,22 @@ def trade(exchange_id):
         strategy_settings = load_strategy_settings(exchange_id)
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
-        # Using the factory to get the correct exchange adapter
-        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
 
+        async_exchange_adapter = ExchangeFactory.get_async_exchange(
+            exchange_id, sub_account_id=strategy_settings[0].sub_account_id
+        )
+        ticker_picker = TickerPicker(async_exchange_adapter, strategy_settings)
+        strategy_settings_filtered = ticker_picker.pick_tickers()
+        if not strategy_settings_filtered:
+            _logger.info("No entry conditions met...")
+            return
+
+            # Using the factory to get the correct exchange adapter
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
         _logger.info(f"Initialising Turtle trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
         exchange_adapter.load_exchange()
 
-        for strategy in strategy_settings:
+        for strategy in strategy_settings_filtered:
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
             trader = TurtleTrader(exchange_adapter, strategy)
@@ -101,15 +110,15 @@ def llm_trade(exchange_id):
         async_exchange_adapter = ExchangeFactory.get_async_exchange(
             exchange_id, sub_account_id=strategy_settings[0].sub_account_id
         )
-        ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
-        strategy_settings = ticker_picker.pick_tickers()
+        llm_ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
+        strategy_settings_filtered = llm_ticker_picker.llm_pick_tickers()
 
         # Llm Trader for each picked ticker
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
             exchange_id, sub_account_id=strategy_settings[0].sub_account_id
         )
         exchange_adapter.load_exchange()
-        for strategy in strategy_settings:
+        for strategy in strategy_settings_filtered:
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
                          f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"

@@ -9,7 +9,7 @@ from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from src.llm_trader import LlmTrader
 from src.prompts import ticker_picker_prompt
 from src.utils.utils import StrategySettingsModel, calculate_indicators_for_llm_trader, \
-    calculate_auto_fibonacci
+    calculate_auto_fibonacci, turtle_trading_signals_adjusted
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=SLACK_URL, username='turtle_trader')
@@ -115,7 +115,7 @@ class LlmTickerPicker(LlmTrader):
             }
         ]
 
-    def pick_tickers(self):
+    def llm_pick_tickers(self):
         _logger.info('Picking tradable tickers...')
         free_balance = self._exchange.free_balance
         total_balance = self._exchange.total_balance
@@ -147,5 +147,53 @@ class LlmTickerPicker(LlmTrader):
             if strategy.ticker in possible_symbols
         ]
         return possible_strategies
+
+
+class TickerPicker:
+    agent_name = 'ticker_picker'
+    system_prompt = ticker_picker_prompt
+
+    def __init__(self, exchange, strategies: List[StrategySettingsModel]):
+        _logger.info("Initiating TickerPicker...")
+        self._exchange = exchange
+        self.strategies = strategies
+        self.tickers_input = [f"{strategy.ticker}/USDT:USDT" for strategy in strategies]
+        self.open_strategies_tickers = []
+
+    async def async_get_tickers_data(self):
+        _logger.info("async - fetching ohlc and open positions")
+        timeframe = self.strategies[0].timeframe
+        buffer_days = self.strategies[0].buffer_days
+
+        await self._exchange.load_exchange()
+
+        op = await self._exchange.get_open_positions()
+        tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
+
+        await self._exchange.close()
+        return tic, op
+
+    def pick_tickers(self):
+
+        tickers_data, open_positions = asyncio.run(self.async_get_tickers_data())
+        self.open_strategies_tickers = [op['symbol'].split('/')[0] for op in open_positions]
+        _logger.info(f'Opened positions {self.open_strategies_tickers}')
+
+        ticker_list = []
+        for tic in tickers_data[0]:
+            tic = turtle_trading_signals_adjusted(tic)
+            tic_last = tic.iloc[-1]
+            if tic_last.long_entry or tic_last.short_entry:
+                ticker_list.append(tic_last.ticker)
+
+        result_list = set(self.open_strategies_tickers + ticker_list)
+
+        # Filter strategies that are applicable to the high score tickers
+        possible_strategies = [
+            strategy for strategy in self.strategies
+            if strategy.ticker in result_list
+        ]
+        return possible_strategies
+
 
 
