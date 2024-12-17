@@ -35,6 +35,7 @@ class LlmTickerPicker(LlmTrader):
         buffer_days = self.strategies[0].buffer_days
 
         await self._exchange.load_exchange()
+        await self._exchange.fetch_balance()
 
         op = await self._exchange.get_open_positions()
         tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
@@ -116,17 +117,26 @@ class LlmTickerPicker(LlmTrader):
 
     def pick_tickers(self):
         _logger.info('Picking tradable tickers...')
-        agent_action = self.call_agent()
-        agent_action.action = 'ticker_pick'
+        free_balance = self._exchange.free_balance
+        total_balance = self._exchange.total_balance
+        free_cap_ratio = free_balance / total_balance
 
-        # Extract ticker and score from the list of dictionaries and filter them based on score > 85
-        high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 85]
+        high_score_tickers_symbols = []
+        if free_cap_ratio >= 0.3:
+            agent_action = self.call_agent()
+            agent_action.action = 'ticker_pick'
 
-        _logger.info(f"Ticker picker selection based on high score: {high_score_tickers}\n"
-                     f"rationale: {agent_action.rationale}")
+            # Extract ticker and score from the list of dictionaries and filter them based on score > 85
+            high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 80]
 
-        # Extract tickers for easier comparison
-        high_score_tickers_symbols = [ticker['ticker'] for ticker in high_score_tickers]
+            _logger.info(f"Ticker picker selection based on high score: {high_score_tickers}\n"
+                         f"rationale: {agent_action.rationale}")
+
+            # Extract tickers for easier comparison
+            high_score_tickers_symbols = [ticker['ticker'] for ticker in high_score_tickers]
+        else:
+            _logger.info(f"Free capital ratio: ({round(free_cap_ratio * 100, 1)}%),"
+                         f" we'll process only open positions")
 
         # Combine unique symbols from open strategies and high-score tickers
         possible_symbols = set(self.open_strategies_tickers + high_score_tickers_symbols)

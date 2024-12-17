@@ -98,17 +98,18 @@ def llm_trade(exchange_id):
                      f"tickers: {[x.ticker for x in strategy_settings]}")
 
         # TickerPicker
-        async_exchange_adapter = ExchangeFactory.get_async_exchange(exchange_id)
+        async_exchange_adapter = ExchangeFactory.get_async_exchange(
+            exchange_id, sub_account_id=strategy_settings[0].sub_account_id
+        )
         ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
         strategy_settings = ticker_picker.pick_tickers()
 
+        # Llm Trader for each picked ticker
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
+            exchange_id, sub_account_id=strategy_settings[0].sub_account_id
+        )
+        exchange_adapter.load_exchange()
         for strategy in strategy_settings:
-            # Using the factory to get the correct exchange adapter
-            exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
-                exchange_id, sub_account_id=strategy.sub_account_id
-            )
-            exchange_adapter.load_exchange()
-
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
                          f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"

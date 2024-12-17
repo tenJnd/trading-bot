@@ -653,6 +653,10 @@ class AsyncExchangeAdapter(BaseExchangeAdapter):
         ohlc_results = await asyncio.gather(asyncio.gather(*ohlc_tasks))
         return ohlc_results
 
+    async def fetch_balance(self):
+        _logger.info(f"getting balance")
+        self.balance = await self._exchange.fetch_balance()
+
     async def close(self):
         """
         Properly close the exchange connection.
