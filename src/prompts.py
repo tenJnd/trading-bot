@@ -246,17 +246,8 @@ Your task is to:
 
 You will receive two CSV-formatted tables:
 
-1. **price_data**: Contains price and indicator metrics for each ticker. Columns include:
-   - **Ticker**: Symbol (e.g., BTCUSD, ETHUSD).
-   - **Price Data**: OHLC (Open, High, Low, Close) and volume.
-   - **Indicators**: ATR, SMA, RSI, MACD, Bollinger Bands (upper/middle/lower), stochastic (K%/D%), ADX, OBV, and OBV SMA.
-
-2. **auto_fib_data**: Contains Fibonacci retracement levels for each ticker. Columns include:
-   - **Ticker**: Symbol (e.g., BTCUSD, ETHUSD).
-   - **Close Price (C)**: The last closing price.
-   - **Fibonacci Levels**: fib_0, fib_23.6, fib_38.2, fib_50.0, fib_61.8, fib_100.
-   - **Swing High/Low**: High and low values used for Fibonacci calculations.
-   - **Fib Period**: The lookback period used for the levels (e.g., 50, 100).
+1. **price_data**: Contains price and indicator metrics for each ticker
+2. **auto_fib_data**: Contains Fibonacci retracement levels for each ticker.
 
 
 ### Decision Guidelines:
@@ -273,10 +264,9 @@ You will receive two CSV-formatted tables:
 - Assign a score (1–100) based on trading potential, prioritizing:
   - Strong trends (trend-following setup).
   - Pullbacks to Fibonacci or Bollinger levels (swing trading setup).
-  - Tight consolidations with breakout potential (breakout setup).
 
 4. **Filter Tickers**:
-   - Avoid over-correlated tickers; focus on diverse opportunities.  
+   - Avoid over-correlated tickers; focus on diverse opportunities.
 
 5. **Provide Explanations**:  
    - Include specific metrics, indicator values, and Fibonacci alignments in the rationale for the two to three best tickers.  

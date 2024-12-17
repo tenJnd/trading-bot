@@ -58,11 +58,11 @@ class AgentAction:
         return '\n'.join([f"{k}: {v}" for k, v in d.items() if v is not None])
 
 
-
 class LlmTrader:
     agent_name = 'llm_trader'
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
+    llm_model_config = TraderModel
     df_tail_for_agent = 20
 
     def __init__(self,
@@ -355,9 +355,8 @@ class LlmTrader:
         ]
 
     def call_agent(self):
-        config = TraderModel
-        _logger.info(f"creating agent using llm factory, config: {config.MODEL}")
-        llm_client = LLMClientFactory.create_llm_client(config)
+        _logger.info(f"creating agent using llm factory, config: {self.llm_model_config.MODEL}")
+        llm_client = LLMClientFactory.create_llm_client(self.llm_model_config)
         functions = self.generate_functions()
         _logger.info(f"Calling the agent...")
 
