@@ -187,6 +187,7 @@ class TickerPicker:
                 ticker_list.append(tic_last.ticker)
 
         result_list = set(self.open_strategies_tickers + ticker_list)
+        _logger.info(f"Filtered tickers: {result_list}")
 
         # Filter strategies that are applicable to the high score tickers
         possible_strategies = [

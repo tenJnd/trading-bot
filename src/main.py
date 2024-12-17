@@ -77,7 +77,6 @@ def trade(exchange_id):
             _logger.info("No entry conditions met...")
             return
 
-            # Using the factory to get the correct exchange adapter
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
         _logger.info(f"Initialising Turtle trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
         exchange_adapter.load_exchange()
