@@ -175,7 +175,7 @@ class TickerPicker:
 
         await self._exchange.load_exchange()
 
-        op = await self._exchange.get_open_positions()
+        op = await self._exchange.get_open_positions_all()
         tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
 
         await self._exchange.close()
