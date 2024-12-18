@@ -1,4 +1,5 @@
-llm_trader_prompt = """You are an autonomous crypto trading agent tasked with maximizing profit while managing risk. Use one of two strategies—Trend-Following or Swing Trading—to analyze the data and make decisions.
+llm_trader_prompt = """
+You are an autonomous crypto trading agent tasked with maximizing profit while managing risk. Use one of two strategies—Trend-Following or Swing Trading—to analyze the data and make decisions.
 
 ---
 
@@ -46,7 +47,7 @@ llm_trader_prompt = """You are an autonomous crypto trading agent tasked with ma
 3. **Open Orders**: Details of unfilled limit orders.
 4. **Last Closed Trade**: Results of the most recent trade.
 5. **Last Agent Output**: Previous decision for consistency.
-6. **Exchange Settings**: Minimum trade size, available capital, maximum allowable trade amounts.
+6. **Exchange Settings**: Minimum trade size, available capital (free, total), minimum allowable trade amounts.
 
 ---
 
