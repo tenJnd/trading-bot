@@ -28,32 +28,41 @@ class LlmTickerPicker(LlmTrader):
         self.open_positions_tickers = []
         self.open_orders_tickers = []
 
-        self.llm_input_data = self.create_llm_input_dict()
+        self.get_symbols_from_ordrs_positions()
 
-    async def async_get_tickers_data(self):
+    async def async_get_orders_positions_data(self):
         _logger.info("async - fetching ohlc and open positions")
-        timeframe = self.strategies[0].timeframe
-        buffer_days = self.strategies[0].buffer_days
 
         await self._exchange.load_exchange()
         await self._exchange.fetch_balance()
 
         op = await self._exchange.get_open_positions_all()
         oo = await self._exchange.get_opened_orders_all(self.tickers_input)
+
+        await self._exchange.close()
+        return op, oo
+
+    def get_symbols_from_ordrs_positions(self):
+        op, oo = asyncio.run(self.async_get_orders_positions_data())
+        self.open_positions_tickers = [op['symbol'].split('/')[0] for op in op]
+        self.open_orders_tickers = [op['symbol'].split('/')[0] for op in oo]
+
+    async def async_get_tickers_data(self):
+        _logger.info("async - fetching ohlc and open positions")
+        timeframe = self.strategies[0].timeframe
+        buffer_days = self.strategies[0].buffer_days
+
         tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
 
         await self._exchange.close()
-        return tic, op, oo
+        return tic
 
     def create_llm_input_dict(self):
         """
         Synchronous wrapper for the asynchronous trading bot function.
         """
         _logger.info("Generating llm input")
-        tickers_data, open_positions, opened_orders = asyncio.run(self.async_get_tickers_data())
-        self.open_positions_tickers = [op['symbol'].split('/')[0] for op in open_positions]
-        self.open_orders_tickers = [op['symbol'].split('/')[0] for op in opened_orders]
-
+        tickers_data = asyncio.run(self.async_get_tickers_data())
         _logger.info(f'Opened positions {self.open_positions_tickers}')
 
         ticker_list = []
@@ -80,7 +89,7 @@ class LlmTickerPicker(LlmTrader):
         all_df_csv = all_df.to_csv(index=False)
         all_fib_df_csv = all_fib_df.to_csv(index=False)
 
-        return str({
+        self.llm_input_data = str({
             'price_data': all_df_csv,
             'auto_fib_data': all_fib_df_csv
         })
@@ -126,7 +135,8 @@ class LlmTickerPicker(LlmTrader):
         free_cap_ratio = free_balance / total_balance
 
         high_score_tickers_symbols = []
-        if free_cap_ratio >= 0.3:
+        if free_cap_ratio >= 0.03:
+            self.create_llm_input_dict()
             agent_action = self.call_agent()
             agent_action.action = 'ticker_pick'
 
