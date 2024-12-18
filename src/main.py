@@ -122,6 +122,7 @@ def llm_trade(exchange_id):
                          f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
             trader = LlmTrader(exchange_adapter, strategy)
+            exchange_adapter.fetch_balance()
             trader.trade()
 
     except Exception as e:
