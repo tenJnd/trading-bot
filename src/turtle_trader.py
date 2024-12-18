@@ -182,7 +182,7 @@ class TurtleTrader:
                 Order.timestamp.desc()
             ).first()
 
-        self.last_closed_timeframe = last_candle_timeframe[0]
+        self.last_closed_timeframe = last_candle_timeframe[0] if last_candle_timeframe else None
 
     @retry(retry_on_exception=retry_if_sqlalchemy_transient_error,
            stop_max_attempt_number=5,
