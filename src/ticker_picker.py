@@ -28,29 +28,20 @@ class LlmTickerPicker(LlmTrader):
         self.open_positions_tickers = []
         self.open_orders_tickers = []
 
-        self.get_symbols_from_ordrs_positions()
+        self.create_llm_input_dict()
 
-    async def async_get_orders_positions_data(self):
+    async def async_fetch_data(self):
         _logger.info("async - fetching ohlc and open positions")
+        timeframe = self.strategies[0].timeframe
+        buffer_days = self.strategies[0].buffer_days
 
         await self._exchange.load_exchange()
         await self._exchange.fetch_balance()
 
         op = await self._exchange.get_open_positions_all()
         oo = await self._exchange.get_opened_orders_all(self.tickers_input)
-
-        await self._exchange.close()
-        return op, oo
-
-    def get_symbols_from_ordrs_positions(self):
-        op, oo = asyncio.run(self.async_get_orders_positions_data())
         self.open_positions_tickers = [op['symbol'].split('/')[0] for op in op]
         self.open_orders_tickers = [op['symbol'].split('/')[0] for op in oo]
-
-    async def async_get_tickers_data(self):
-        _logger.info("async - fetching ohlc and open positions")
-        timeframe = self.strategies[0].timeframe
-        buffer_days = self.strategies[0].buffer_days
 
         tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
 
@@ -62,7 +53,7 @@ class LlmTickerPicker(LlmTrader):
         Synchronous wrapper for the asynchronous trading bot function.
         """
         _logger.info("Generating llm input")
-        tickers_data = asyncio.run(self.async_get_tickers_data())
+        tickers_data = asyncio.run(self.async_fetch_data())
         _logger.info(f'Opened positions {self.open_positions_tickers}')
 
         ticker_list = []
@@ -135,8 +126,7 @@ class LlmTickerPicker(LlmTrader):
         free_cap_ratio = free_balance / total_balance
 
         high_score_tickers_symbols = []
-        if free_cap_ratio >= 0.03:
-            self.create_llm_input_dict()
+        if free_cap_ratio >= 0.3:
             agent_action = self.call_agent()
             agent_action.action = 'ticker_pick'
 
