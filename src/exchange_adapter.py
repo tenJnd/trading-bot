@@ -297,7 +297,7 @@ class BaseExchangeAdapter:
 
         return open_positions
 
-    def get_open_positions(self):
+    def get_open_positions_all(self):
         """
         fetch open positions for the current market.
         """
@@ -321,6 +321,9 @@ class BaseExchangeAdapter:
             _logger.info(f"No open orders found.")
 
         return open_orders
+
+    def get_opened_orders_all(self, symbols):
+        raise NotImplemented
 
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
@@ -636,7 +639,7 @@ class AsyncExchangeAdapter(BaseExchangeAdapter):
             return candles_df
         return pd.DataFrame()
 
-    async def get_open_positions(self):
+    async def get_open_positions_all(self):
         """
         Asynchronously fetch open positions for the current market.
         """
@@ -656,6 +659,37 @@ class AsyncExchangeAdapter(BaseExchangeAdapter):
     async def fetch_balance(self):
         _logger.info(f"getting balance")
         self.balance = await self._exchange.fetch_balance()
+
+    async def get_opened_orders(self, symbol=None):
+        """
+        Fetch open orders for a single symbol asynchronously.
+        :param symbol: Symbol (ticker) to fetch open orders for
+        :return: List of orders
+        """
+        if not symbol:
+            symbol = self._exchange.markets
+        try:
+            return await self._exchange.fetch_open_orders(symbol)
+        except Exception as e:
+            print(f"Error fetching open orders for {symbol}: {e}")
+            return []
+
+    async def get_opened_orders_all(self, symbols):
+        """
+        Fetch open orders for multiple symbols concurrently.
+
+        :param symbols: List of symbols (tickers) to fetch open orders for
+        :return: List of orders
+        """
+        tasks = [self.get_opened_orders(symbol) for symbol in symbols]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Flatten results into a single list, filtering out None or empty lists
+        orders = [
+            order for orders_per_symbol in results if isinstance(orders_per_symbol, list)
+            for order in orders_per_symbol
+        ]
+        return orders
 
     async def close(self):
         """

@@ -25,7 +25,8 @@ class LlmTickerPicker(LlmTrader):
         super().__init__(exchange=exchange, load_data=False)
         self.strategies = strategies
         self.tickers_input = [f"{strategy.ticker}/USDT:USDT" for strategy in strategies]
-        self.open_strategies_tickers = []
+        self.open_positions_tickers = []
+        self.open_orders_tickers = []
 
         self.llm_input_data = self.create_llm_input_dict()
 
@@ -37,20 +38,23 @@ class LlmTickerPicker(LlmTrader):
         await self._exchange.load_exchange()
         await self._exchange.fetch_balance()
 
-        op = await self._exchange.get_open_positions()
+        op = await self._exchange.get_open_positions_all()
+        oo = await self._exchange.get_opened_orders_all(self.tickers_input)
         tic = await self._exchange.async_fetch_ohlc(self.tickers_input, days=buffer_days, timeframe=timeframe)
 
         await self._exchange.close()
-        return tic, op
+        return tic, op, oo
 
     def create_llm_input_dict(self):
         """
         Synchronous wrapper for the asynchronous trading bot function.
         """
         _logger.info("Generating llm input")
-        tickers_data, open_positions = asyncio.run(self.async_get_tickers_data())
-        self.open_strategies_tickers = [op['symbol'].split('/')[0] for op in open_positions]
-        _logger.info(f'Opened positions {self.open_strategies_tickers}')
+        tickers_data, open_positions, opened_orders = asyncio.run(self.async_get_tickers_data())
+        self.open_positions_tickers = [op['symbol'].split('/')[0] for op in open_positions]
+        self.open_orders_tickers = [op['symbol'].split('/')[0] for op in opened_orders]
+
+        _logger.info(f'Opened positions {self.open_positions_tickers}')
 
         ticker_list = []
         fib_list = []
@@ -139,7 +143,11 @@ class LlmTickerPicker(LlmTrader):
                          f" we'll process only open positions")
 
         # Combine unique symbols from open strategies and high-score tickers
-        possible_symbols = set(self.open_strategies_tickers + high_score_tickers_symbols)
+        possible_symbols = set(
+            self.open_positions_tickers +
+            self.open_orders_tickers +
+            high_score_tickers_symbols
+        )
 
         # Filter strategies that are applicable to the high score tickers
         possible_strategies = [
@@ -158,7 +166,7 @@ class TickerPicker:
         self._exchange = exchange
         self.strategies = strategies
         self.tickers_input = [f"{strategy.ticker}/USDT:USDT" for strategy in strategies]
-        self.open_strategies_tickers = []
+        self.open_positions_tickers = []
 
     async def async_get_tickers_data(self):
         _logger.info("async - fetching ohlc and open positions")
@@ -176,8 +184,8 @@ class TickerPicker:
     def pick_tickers(self):
 
         tickers_data, open_positions = asyncio.run(self.async_get_tickers_data())
-        self.open_strategies_tickers = [op['symbol'].split('/')[0] for op in open_positions]
-        _logger.info(f'Opened positions {self.open_strategies_tickers}')
+        self.open_positions_tickers = [op['symbol'].split('/')[0] for op in open_positions]
+        _logger.info(f'Opened positions {self.open_positions_tickers}')
 
         ticker_list = []
         for tic in tickers_data[0]:
@@ -186,7 +194,7 @@ class TickerPicker:
             if tic_last.long_entry or tic_last.short_entry:
                 ticker_list.append(tic_last.ticker)
 
-        result_list = set(self.open_strategies_tickers + ticker_list)
+        result_list = set(self.open_positions_tickers + ticker_list)
         _logger.info(f"Filtered tickers: {result_list}")
 
         # Filter strategies that are applicable to the high score tickers
@@ -195,6 +203,3 @@ class TickerPicker:
             if strategy.ticker in result_list
         ]
         return possible_strategies
-
-
-
