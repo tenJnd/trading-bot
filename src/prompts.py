@@ -196,7 +196,7 @@ The stop-loss (5.30) is closer to the entry price than the take-profit (5.35), r
 Take-profit is set unrealistically close, failing to account for market volatility or logical levels.
 The rationale does not justify the trade properly.
 
-2. Incorrect Output for Limit Orders
+3. Incorrect Output for Limit Orders
 Scenario: The agent suggests a long trade with a limit order, but the entry price is set above the current price at 5.50, reducing the trade's viability.
 {
   "action": "long",
