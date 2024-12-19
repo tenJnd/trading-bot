@@ -13,7 +13,8 @@ from sqlalchemy import desc
 
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
-from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN
+from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN, \
+    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
@@ -21,7 +22,7 @@ from src.utils.utils import (calculate_sma, round_series,
                              calculate_auto_fibonacci,
                              calculate_pivot_points, shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
-                             calculate_indicators_for_llm_entry_validator, StrategySettingsModel)
+                             calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -271,6 +272,7 @@ class LlmTrader:
 
         price_data_dict = {
             'timing_info': timing_data,
+            'current_price': self.last_close_price,
             'price_and_indicators': price_data_csv,
             'funding_rate': fr,
             'fib_levels': fib_dict,
@@ -286,22 +288,10 @@ class LlmTrader:
             'opened_orders': self.opened_orders,
             # 'last_closed_trade': self.trade_history,
             # 'last_agent_output': self.last_agent_output,
-            'exchange_settings': self.exchange_settings
+            # 'exchange_settings': self.exchange_settings
         }
 
         return str(llm_input)
-
-    def check_constrains(self):
-        """ add all the 'before call conditions/constrains here """
-        max_amount = self.exchange_settings.get('max_amount_based_on_free_capital', 0)
-        min_amount = self.exchange_settings.get('min_amount', 0)
-
-        if min_amount > max_amount:
-            raise ConditionVerificationError(f'min amount ({min_amount}) > '
-                                             f'max amount ({max_amount}, based on free capital)\n'
-                                             f'exiting llm trader w/ a call')
-
-        _logger.info("No constrains, can call the agent...")
 
     @staticmethod
     def generate_functions():
@@ -320,7 +310,7 @@ class LlmTrader:
                             "type": "string",
                             "enum": ["limit", "market"],
                             "description": "The type of order to place. Required for 'long' or 'short'."
-                        },
+                        },  # TODO: amount outside of agent scope
                         "amount": {
                             "type": ["number", "null"],
                             "description": "The amount for the position or order."
@@ -372,6 +362,125 @@ class LlmTrader:
 
         return self.agent_action_obj(**structured_data)
 
+    def pre_check_constrains(self):
+        """ add all the 'before call conditions/constrains here """
+        max_amount = self.exchange_settings.get('max_amount_based_on_free_capital', 0)
+        min_amount = self.exchange_settings.get('min_amount', 0)
+
+        if min_amount > max_amount:
+            raise ConditionVerificationError(f'min amount ({min_amount}) > '
+                                             f'max amount ({max_amount}, based on free capital)\n'
+                                             f'exiting llm trader w/ a call')
+
+        _logger.info("No constrains, can call the agent...")
+
+    def check_trade_valid(self, agent_action) -> AgentAction:
+        """
+        Validate the agent's action post-call to ensure logical and valid trade decisions.
+
+        Args:
+            agent_action (AgentAction): The action object returned by the agent.
+
+        Returns:
+            AgentAction: The validated agent action.
+
+        Raises:
+            ValueError: If R:R ratio is invalid or prices do not align with the trade direction.
+        """
+        # Determine the current price (use entry price if provided, otherwise last close price)
+        c_price = agent_action.entry_price if agent_action.entry_price else self.last_close_price
+
+        # Calculate moves for R:R ratio validation
+        move_against = abs(agent_action.stop_loss - c_price)
+        move_in_favour = abs(agent_action.take_profit - c_price) if agent_action.take_profit else None
+
+        # Validate R:R ratio (raise error if invalid)
+        if move_in_favour and (move_in_favour / move_against) < 1:
+            raise ValueError(f"Invalid R:R ratio. R:R is less than 1:1 for {agent_action.action} action.")
+
+        # Price validation for long positions
+        if agent_action.action == "long":
+            if not (agent_action.stop_loss < c_price < agent_action.take_profit):
+                raise ValueError(
+                    f"Invalid price logic for long: stop-loss {agent_action.stop_loss} "
+                    f"< entry price {c_price} < take-profit {agent_action.take_profit}."
+                )
+            if agent_action.entry_price:
+                if agent_action.entry_price > self.last_close_price:
+                    raise ValueError(
+                        f"Invalid price logic for long: limit-price {agent_action.entry_price} "
+                        f"limit-price {agent_action.entry_price} > entry price {c_price}."
+                    )
+
+        # Price validation for short positions
+        if agent_action.action == "short":
+            if not (agent_action.stop_loss > c_price > agent_action.take_profit):
+                raise ValueError(
+                    f"Invalid price logic for short: stop-loss {agent_action.stop_loss} "
+                    f"> entry price {c_price} > take-profit {agent_action.take_profit}."
+                )
+            if agent_action.entry_price:
+                if agent_action.entry_price < self.last_close_price:
+                    raise ValueError(
+                        f"Invalid price logic for long: "
+                        f"limit-price {agent_action.entry_price} < entry price {c_price}."
+                    )
+
+        return agent_action
+
+    def calculate_amount(self, agent_action) -> AgentAction:
+        """
+        Calculate the trade amount based on the agent's action and ensure it adheres to exchange rules.
+
+        Args:
+            agent_action (AgentAction): The agent's action containing trade parameters.
+
+        Returns:
+            AgentAction: Updated with the calculated amount, or None if the trade is invalid.
+        """
+        # Determine the price for calculation (use limit price if available, otherwise last close price)
+        agent_limit_price = agent_action.entry_price
+        c_price = agent_limit_price if agent_limit_price else self._exchange.close_price
+
+        # Calculate the potential risk per trade
+        move_against = abs(agent_action.stop_loss - c_price)
+        trade_risk_cap = self._exchange.free_balance * 0.02  # 2% risk per trade
+        raw_amount = trade_risk_cap / move_against
+
+        # Check if the raw amount is below the exchange's minimum tradable amount
+        if raw_amount < self._exchange.min_amount:
+            msg = (self.format_log(agent_action) +
+                   f"Calculated raw amount {raw_amount} is below the minimum tradable amount "
+                   f"{self._exchange.min_amount}. SKIPPING")
+            _logger.warning(msg)
+            _notifier.warning(msg)
+            return None
+
+        # Calculate raw cost based on the raw amount
+        raw_cost = raw_amount * c_price * self._exchange.contract_size
+
+        # Apply precision rounding based on exchange rules
+        rounded_amount = get_adjusted_amount(raw_amount, self._exchange.amount_precision)
+        _logger.debug(f"Rounded amount: {rounded_amount}")
+
+        # Calculate cost after rounding
+        rounded_cost = rounded_amount * c_price * self._exchange.contract_size
+        _logger.debug(f"Cost after rounding: {rounded_cost}")
+
+        # Validate rounding difference
+        percentage_difference = abs(rounded_cost - raw_cost) / raw_cost * 100
+        if percentage_difference > ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD:
+            msg = (f"Percentage difference between pre-rounded cost ({raw_cost}) "
+                   f"and post-rounded cost ({rounded_cost}) is {percentage_difference:.2f}%, "
+                   f"exceeding the threshold of {ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD}%. SKIPPING")
+            _logger.warning(msg)
+            _notifier.warning(msg)
+            return None
+
+        # Assign the rounded amount to the agent's action and return
+        agent_action.amount = rounded_amount
+        return agent_action
+
     def format_log(self, agent_action):
         # Combine the strategy settings with the action string, skipping None values in the log
         return (f"ticker: {self.strategy_settings.ticker}, "
@@ -379,12 +488,19 @@ class LlmTrader:
                 f"{agent_action.nice_print()}")
 
     def trade(self):
-        self.check_constrains()
+        self.pre_check_constrains()
         agent_action = self.call_agent()
+        if agent_action.action in ['long', 'short']:
+            agent_action = self.check_trade_valid(agent_action)
+            agent_action = self.calculate_amount(agent_action)
+
+        if agent_action is None:
+            return
+
         msg = self.format_log(agent_action)
 
         order = None
-        if agent_action.action == 'long' or agent_action.action == 'short':
+        if agent_action.action in ['long', 'short']:
             order = self._exchange.order(action_key=agent_action.action,
                                          amount=agent_action.amount,
                                          limit_price=agent_action.entry_price,
@@ -393,7 +509,7 @@ class LlmTrader:
         elif agent_action.action == 'close':
             order = self._exchange.order(agent_action.action, agent_action.amount)
             last_trade = self.get_last_trade_data()
-            msg = (f"{self.formate_log(agent_action)}"
+            msg = (f"{self.format_log(agent_action)}"
                    f"Trade results: {last_trade}")
 
         elif agent_action.action == 'cancel':

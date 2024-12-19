@@ -95,7 +95,7 @@ def trade(exchange_id):
 
 
 @cli.command(help='run LLM trading bot')
-@click.option('-exch', '--exchange_id', type=str, default='binance')
+@click.option('-exch', '--exchange_id', type=str, default='bybit')
 def llm_trade(exchange_id):
     _logger.info("\n============== STARTING LLM TRADE SESSION ==============\n")
     try:
