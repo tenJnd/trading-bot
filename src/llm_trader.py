@@ -284,8 +284,8 @@ class LlmTrader:
             'price_data': self.price_action_data,
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
-            'last_closed_trade': self.trade_history,
-            'last_agent_output': self.last_agent_output,
+            # 'last_closed_trade': self.trade_history,
+            # 'last_agent_output': self.last_agent_output,
             'exchange_settings': self.exchange_settings
         }
 
