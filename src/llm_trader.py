@@ -440,7 +440,8 @@ class LlmTrader:
         """
         # Determine the price for calculation (use limit price if available, otherwise last close price)
         agent_limit_price = agent_action.entry_price
-        c_price = agent_limit_price if agent_limit_price else self._exchange.close_price
+        close_price = self._exchange.get_close_price
+        c_price = agent_limit_price if agent_limit_price else close_price
 
         # Calculate the potential risk per trade
         move_against = abs(agent_action.stop_loss - c_price)

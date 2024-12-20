@@ -263,7 +263,7 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def close_price(self):
+    def get_close_price(self):
         _logger.info(f"getting close price")
         return self._exchange.fetch_ticker(symbol=self.market_futures)['close']
 
