@@ -538,7 +538,7 @@ class LlmTrader:
 
     def trade(self):
         self.pre_check_constrains()
-        agent_action = self.call_agent_repeat_w_validation()
+        agent_action = self.call_agent_w_validation()
 
         if agent_action.action in ['long', 'short']:
             agent_action = self.calculate_amount(agent_action)
