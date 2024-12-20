@@ -366,7 +366,7 @@ class LlmTrader:
 
         return self.agent_action_obj(**structured_data)
 
-    def call_agent_repeat(self):
+    def call_agent_w_validation(self):
         counter = 1
         agent_action = None
 
@@ -383,7 +383,7 @@ class LlmTrader:
                 _notifier.warning(msg)
 
                 previous_output_dict = {
-                    'previous_output': agent_action,
+                    'previous_agent_action': agent_action,
                     'error': exc
                 }
                 self.llm_input_data['previous_output'] = previous_output_dict
@@ -538,7 +538,7 @@ class LlmTrader:
 
     def trade(self):
         self.pre_check_constrains()
-        agent_action = self.call_agent_repeat()
+        agent_action = self.call_agent_repeat_w_validation()
 
         if agent_action.action in ['long', 'short']:
             agent_action = self.calculate_amount(agent_action)
