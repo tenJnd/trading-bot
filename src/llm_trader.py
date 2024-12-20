@@ -28,6 +28,10 @@ _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
 
 
+class ValidationError(Exception):
+    """ Validation error"""
+
+
 class TraderModel(model_config.ModelConfig):
     MODEL = 'gpt-4o'
     MAX_TOKENS = 2000
@@ -291,7 +295,7 @@ class LlmTrader:
             # 'exchange_settings': self.exchange_settings
         }
 
-        return str(llm_input)
+        return llm_input
 
     @staticmethod
     def generate_functions():
@@ -352,7 +356,7 @@ class LlmTrader:
 
         response = llm_client.call_with_functions(
             system_prompt=self.system_prompt,
-            user_prompt=self.llm_input_data,
+            user_prompt=str(self.llm_input_data),
             functions=functions
         )
         _logger.info(f'response: {response}')
@@ -361,6 +365,31 @@ class LlmTrader:
         _logger.info(f"agent call success")
 
         return self.agent_action_obj(**structured_data)
+
+    def call_agent_repeat(self):
+        counter = 1
+        agent_action = None
+
+        while counter < 3:
+            try:
+                agent_action = self.call_agent()
+                self.check_trade_valid(agent_action)
+                break
+            except ValidationError as exc:
+                msg = (f"agent output not validated: {exc} "
+                       f"agent_action: {agent_action.nice_print()} "
+                       f"try num: {counter}")
+                _logger.warning(msg)
+                _notifier.warning(msg)
+
+                previous_output_dict = {
+                    'previous_output': agent_action,
+                    'error': exc
+                }
+                self.llm_input_data['previous_output'] = previous_output_dict
+                counter += 1
+
+        return agent_action
 
     def pre_check_constrains(self):
         """ add all the 'before call conditions/constrains here """
@@ -385,46 +414,65 @@ class LlmTrader:
             AgentAction: The validated agent action.
 
         Raises:
-            ValueError: If R:R ratio is invalid or prices do not align with the trade direction.
+            ValidationError: If R:R ratio is invalid or prices do not align with the trade direction.
         """
+        if agent_action.action not in ['long', 'short']:
+            return agent_action
+
         # Determine the current price (use entry price if provided, otherwise last close price)
         c_price = agent_action.entry_price if agent_action.entry_price else self.last_close_price
+
+        # Initialize error messages list
+        error_messages = []
 
         # Calculate moves for R:R ratio validation
         move_against = abs(agent_action.stop_loss - c_price)
         move_in_favour = abs(agent_action.take_profit - c_price) if agent_action.take_profit else None
 
-        # Validate R:R ratio (raise error if invalid)
-        if move_in_favour and (move_in_favour / move_against) < 1:
-            raise ValueError(f"Invalid R:R ratio. R:R is less than 1:1 for {agent_action.action} action.")
+        # Validate R:R ratio
+        if move_in_favour:
+            rr_ratio = move_in_favour / move_against
+            if rr_ratio < 1:
+                error_messages.append(
+                    f"Invalid R:R ratio. R:R is less than 1:1 for {agent_action.action} action. "
+                    f"Current R:R = {rr_ratio:.2f}. Adjust take-profit or stop-loss to ensure R:R >= 1:1."
+                )
 
         # Price validation for long positions
         if agent_action.action == "long":
-            if not (agent_action.stop_loss < c_price < agent_action.take_profit):
-                raise ValueError(
-                    f"Invalid price logic for long: stop-loss {agent_action.stop_loss} "
-                    f"< entry price {c_price} < take-profit {agent_action.take_profit}."
+            if not (agent_action.stop_loss < c_price < (agent_action.take_profit or float('inf'))):
+                error_messages.append(
+                    f"Invalid price logic for long position: stop-loss ({agent_action.stop_loss}) must be below entry price ({c_price}), "
+                    f"and take-profit ({agent_action.take_profit or 'None'}) must be above entry price. "
+                    f"Adjust stop-loss or take-profit levels to correct this logic."
                 )
             if agent_action.entry_price:
                 if agent_action.entry_price > self.last_close_price:
-                    raise ValueError(
-                        f"Invalid price logic for long: limit-price {agent_action.entry_price} "
-                        f"limit-price {agent_action.entry_price} > entry price {c_price}."
+                    error_messages.append(
+                        f"Invalid limit order price for long position: limit price ({agent_action.entry_price}) "
+                        f"is above the current close price ({self.last_close_price}). Adjust the limit price to be below the close price."
                     )
 
         # Price validation for short positions
         if agent_action.action == "short":
-            if not (agent_action.stop_loss > c_price > agent_action.take_profit):
-                raise ValueError(
-                    f"Invalid price logic for short: stop-loss {agent_action.stop_loss} "
-                    f"> entry price {c_price} > take-profit {agent_action.take_profit}."
+            if not (agent_action.stop_loss > c_price > (agent_action.take_profit or 0)):
+                error_messages.append(
+                    f"Invalid price logic for short position: stop-loss ({agent_action.stop_loss}) must be above entry price ({c_price}), "
+                    f"and take-profit ({agent_action.take_profit or 'None'}) must be below entry price. "
+                    f"Adjust stop-loss or take-profit levels to correct this logic."
                 )
             if agent_action.entry_price:
                 if agent_action.entry_price < self.last_close_price:
-                    raise ValueError(
-                        f"Invalid price logic for long: "
-                        f"limit-price {agent_action.entry_price} < entry price {c_price}."
+                    error_messages.append(
+                        f"Invalid limit order price for short position: limit price ({agent_action.entry_price}) "
+                        f"is below the current close price ({self.last_close_price}). Adjust the limit price to be above the close price."
                     )
+
+        # Raise ValidationError with all issues if any exist
+        if error_messages:
+            raise ValidationError("; ".join(error_messages))
+        else:
+            _logger.info(f"Trade is valid")
 
         return agent_action
 
@@ -490,9 +538,9 @@ class LlmTrader:
 
     def trade(self):
         self.pre_check_constrains()
-        agent_action = self.call_agent()
+        agent_action = self.call_agent_repeat()
+
         if agent_action.action in ['long', 'short']:
-            agent_action = self.check_trade_valid(agent_action)
             agent_action = self.calculate_amount(agent_action)
 
         if agent_action is None:

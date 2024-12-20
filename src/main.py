@@ -96,8 +96,11 @@ def trade(exchange_id):
 
 @cli.command(help='run LLM trading bot')
 @click.option('-exch', '--exchange_id', type=str, default='bybit')
-def llm_trade(exchange_id):
+@click.option('-t', '--tickers', type=str, default=None)
+def llm_trade(exchange_id, tickers):
     _logger.info("\n============== STARTING LLM TRADE SESSION ==============\n")
+    if tickers:
+        tickers = tickers.split(',')
     try:
         strategy_settings = load_strategy_settings(exchange_id, 'llm_trader')
         if not strategy_settings:
@@ -105,12 +108,18 @@ def llm_trade(exchange_id):
         _logger.info(f"Initialising LLM trader on {exchange_id}, "
                      f"tickers: {[x.ticker for x in strategy_settings]}")
 
-        # TickerPicker
-        async_exchange_adapter = ExchangeFactory.get_async_exchange(
-            exchange_id, sub_account_id=strategy_settings[0].sub_account_id
-        )
-        llm_ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
-        strategy_settings_filtered = llm_ticker_picker.llm_pick_tickers()
+        if tickers:
+            strategy_settings_filtered = [
+                strategy for strategy in strategy_settings
+                if strategy.ticker in tickers
+            ]
+        else:
+            # TickerPicker
+            async_exchange_adapter = ExchangeFactory.get_async_exchange(
+                exchange_id, sub_account_id=strategy_settings[0].sub_account_id
+            )
+            llm_ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
+            strategy_settings_filtered = llm_ticker_picker.llm_pick_tickers()
 
         # Llm Trader for each picked ticker
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
