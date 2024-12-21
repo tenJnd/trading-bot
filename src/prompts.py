@@ -47,14 +47,14 @@ Your goals:
 ---
 
 ## Input Data:
-1. **Market Data**: 
-   - Timing info (`current_timestamp`, `candle_timestamp`, `candle_timeframe`).
-   - Current Price (current asset price).
-   - OHLCV (Open, High, Low, Close, Volume) data.
-   - ATR, SMA, RSI, MACD, Bollinger Bands, Stochastic Oscillator.
-   - Fibonacci Levels, Pivot Points.
-   - Open Interest, Funding Rate (8-hour timeframe).
-
+1. **Market Data**:
+   - **Current Price**: The latest close price of the asset (`current_price`).
+   - **Price Data**: A dictionary containing data for multiple timeframes (e.g., 4h, 1d). Each timeframe includes:
+     - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
+     - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., ATR, SMA, RSI, MACD).
+     - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
+     - **Pivot Points**: A dictionary of pivot points and support/resistance levels (`pivot_points`).
+   - **Current Funding Rate**: The latest funding rate for the asset (`current_funding_rate`).
 2. **Open Positions**: Details of active positions.
 3. **Open Orders**: Details of unfilled limit orders.
 4. **Previous Output (if provided)**:

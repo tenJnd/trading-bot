@@ -24,6 +24,30 @@ from src.utils.utils import (calculate_sma, round_series,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount)
 
+# Example dictionary
+PERIODS = {
+    '4h': 40,
+    '1d': 220,
+    '3d': 660,
+}
+
+
+def get_next_key(base_key):
+    # Convert the keys to a list
+    keys = list(PERIODS.keys())
+
+    # Find the index of the key
+    index = keys.index(base_key)
+
+    # Get the next key and value if it exists
+    if index + 1 < len(keys):
+        next_key = keys[index + 1]
+    else:
+        raise ValueError(f"No key exists after '{base_key}'")
+
+    return next_key
+
+
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
 
@@ -68,7 +92,7 @@ class LlmTrader:
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
-    df_tail_for_agent = 20
+    df_tail_for_agent = 15
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -145,8 +169,9 @@ class LlmTrader:
             'max_amount_based_on_free_capital': max_amount
         }
 
-    def preprocess_open_interest(self):
-        oi = self._exchange.get_open_interest_hist(timeframe=self.strategy_settings.timeframe)
+    def preprocess_open_interest(self, timeframe=None):
+        timeframe = timeframe if timeframe else self.strategy_settings.timeframe
+        oi = self._exchange.get_open_interest_hist(timeframe=timeframe)
         if oi:
             oi_df = pd.DataFrame(oi)
             keep_cols = ['timestamp', 'open_interest']
@@ -169,10 +194,10 @@ class LlmTrader:
             simple_fr_dict['previous_funding_timestamp'] = fr.get('previousFundingTimestamp', None)
             return simple_fr_dict
 
-    def get_ohcl_data(self):
-        ohlc = self._exchange.fetch_ohlc(
-            days=self.strategy_settings.buffer_days, timeframe=self.strategy_settings.timeframe
-        )
+    def get_ohcl_data(self, buffer_days=None, timeframe=None):
+        timeframe = timeframe if timeframe else self.strategy_settings.timeframe
+        buffer_days = buffer_days if buffer_days else self.strategy_settings.buffer_days
+        ohlc = self._exchange.fetch_ohlc(days=buffer_days, timeframe=timeframe)
         return ohlc
 
     def get_open_positions_data(self):
@@ -244,43 +269,62 @@ class LlmTrader:
     def _calculate_indicators_for_llm_trader(df):
         return calculate_indicators_for_llm_trader(df)
 
+    def calculate_data_multiple_periods(self):
+        base_timeframe = self.strategy_settings.timeframe
+        higher_timeframe = get_next_key(base_timeframe)
+
+        timeframes = [base_timeframe, higher_timeframe]
+
+        result_data = {}
+
+        for timeframe in timeframes:
+            buffer_days = PERIODS.get(timeframe)
+            oi = self.preprocess_open_interest(timeframe=timeframe)
+            df = self.get_ohcl_data(buffer_days=buffer_days, timeframe=timeframe)
+
+            last_close_price = df.iloc[-1]['C']
+            last_candle_timestamp = df.iloc[-1]['timeframe']
+            self.last_close_price = last_close_price if not self.last_close_price else last_close_price
+            self.last_candle_timestamp = last_candle_timestamp if not self.last_candle_timestamp \
+                else last_candle_timestamp
+
+            df.set_index('timeframe', inplace=True)
+            df = self._calculate_indicators_for_llm_trader(df)
+
+            df = shorten_large_numbers(df, 'obv')
+            df = shorten_large_numbers(df, 'obv_sma_20')
+
+            fib_dict = calculate_auto_fibonacci(df, lookback_periods=[50])
+            pp_dict = calculate_pivot_points(df, lookback_periods=[20])
+
+            merged_df = df.copy()
+            if oi is not None:
+                merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
+
+            # if fr is not None:
+            #     merged_df = pd.merge(merged_df, fr, how='outer', left_index=True, right_index=True)
+
+            merged_df = merged_df.drop(['datetime'], axis=1)
+            df_tail = merged_df.tail(self.df_tail_for_agent)
+            price_data_csv = df_tail.to_csv()
+
+            timing_data = self.get_timing_info(last_candle_timestamp)
+
+            result_data[timeframe] = {
+                'timing_info': timing_data,
+                'price_and_indicators': price_data_csv,
+                'fib_levels': fib_dict,
+                'pivot_points': pp_dict
+            }
+        return result_data
+
     def get_price_action_data(self):
-        oi = self.preprocess_open_interest()
         fr = self.get_current_funding_rate()
-        df = self.get_ohcl_data()
-
-        self.last_close_price = df.iloc[-1]['C']
-        self.last_candle_timestamp = df.iloc[-1]['timeframe']
-
-        df.set_index('timeframe', inplace=True)
-        df = self._calculate_indicators_for_llm_trader(df)
-
-        df = shorten_large_numbers(df, 'obv')
-        df = shorten_large_numbers(df, 'obv_sma_20')
-
-        fib_dict = calculate_auto_fibonacci(df, lookback_periods=[50, 100])
-        pp_dict = calculate_pivot_points(df, lookback_periods=[20, 50])
-
-        merged_df = df.copy()
-        if oi is not None:
-            merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
-
-        # if fr is not None:
-        #     merged_df = pd.merge(merged_df, fr, how='outer', left_index=True, right_index=True)
-
-        merged_df = merged_df.drop(['datetime'], axis=1)
-        df_tail = merged_df.tail(self.df_tail_for_agent)
-        price_data_csv = df_tail.to_csv()
-
-        timing_data = self.get_timing_info(self.last_candle_timestamp)
-
+        data_multiple_periods = self.calculate_data_multiple_periods()
         price_data_dict = {
-            'timing_info': timing_data,
             'current_price': self.last_close_price,
-            'price_and_indicators': price_data_csv,
-            'funding_rate': fr,
-            'fib_levels': fib_dict,
-            'pivot_points': pp_dict
+            'price_data': data_multiple_periods,
+            'current_funding_rate': fr
         }
         return price_data_dict
 
@@ -558,19 +602,18 @@ class LlmTrader:
         elif agent_action.action == 'close':
             order = self._exchange.order(agent_action.action, agent_action.amount)
             last_trade = self.get_last_trade_data()
-            msg = (f"{self.format_log(agent_action)}"
+            msg = (f":bangbang: {self.format_log(agent_action)}"
                    f"Trade results: {last_trade}")
 
         elif agent_action.action == 'cancel':
             order = self._exchange.cancel_order(agent_action.order_id)
 
-        self.save_agent_action(agent_action, order)
-
         _logger.info(msg)
         if agent_action.action == 'hold':
             _notifier.info(msg)
         else:
-            _notifier.info(msg, echo='here')
+            self.save_agent_action(agent_action, order)
+            _notifier.info(f':bangbang: {msg}', echo='here')
 
     def save_agent_action(self, agent_action: AgentAction, order=None):
         _logger.info("Saving agent action...")
