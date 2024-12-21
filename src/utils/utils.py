@@ -226,11 +226,12 @@ def calculate_stochastic_oscillator(df, period=14, smooth_k=3, smooth_d=3):
 
 def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
     """
-    Calculate Fibonacci retracement levels for multiple periods.
+    Calculate Fibonacci retracement or extension levels for multiple periods.
 
     :param df: DataFrame containing OHLCV data with columns ['O', 'H', 'L', 'C', 'V']
     :param lookback_periods: List of periods to calculate Fibonacci levels for
-    :return: Dictionary in the format {lookback_period: {fib_0: value, fib_23.6: value, ...}}
+    :return: List of dictionaries in the format:
+             {lookback_period: {fib_0: value, fib_23.6: value, ..., type: 'retracement' or 'extension'}}
     """
     fib_dict = []
 
@@ -239,20 +240,32 @@ def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
         swing_high = df['H'].rolling(window=period).max().iloc[-1]
         swing_low = df['L'].rolling(window=period).min().iloc[-1]
 
-        # Fibonacci retracement levels
-        fib_levels = [0, 23.6, 38.2, 50.0, 61.8, 100]
+        # Determine if it is a retracement or extension based on the current close price
+        current_close = df['C'].iloc[-1]
+        if swing_high >= current_close >= swing_low:
+            fib_type = "retracement"
+            fib_levels = [0, 23.6, 38.2, 50.0, 61.8, 100]
+            fib_values = {
+                f'fib_{level}': dynamic_safe_round(swing_high - (swing_high - swing_low) * (level / 100))
+                for level in fib_levels
+            }
+        elif current_close >= swing_high:
+            fib_type = "extension"
+            fib_levels = [100, 123.6, 138.2, 150.0, 161.8, 200]
+            fib_values = {
+                f'fib_{level}': dynamic_safe_round(swing_high + (swing_high - swing_low) * ((level - 100) / 100))
+                for level in fib_levels
+            }
+        else:
+            raise ValueError(
+                "Invalid state for Fibonacci calculation. Close price does not indicate retracement or extension.")
 
-        # Calculate Fibonacci retracement levels and store them in a dictionary
-        fib_values = {
-            f'fib_{level}': dynamic_safe_round(swing_high - (swing_high - swing_low) * (level / 100)) for level in
-            fib_levels
-        }
-
-        # Add the swing high and swing low to the dictionary
+        # Add the swing high, swing low, and additional metadata to the dictionary
         fib_values['swing_high'] = swing_high
         fib_values['swing_low'] = swing_low
-
         fib_values['fib_period'] = period
+        fib_values['type'] = fib_type
+
         fib_dict.append(fib_values)
 
     return fib_dict
