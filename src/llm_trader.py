@@ -22,7 +22,8 @@ from src.utils.utils import (calculate_sma, round_series,
                              calculate_auto_fibonacci,
                              calculate_pivot_points, shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
-                             calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount)
+                             calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
+                             calculate_closest_fvg_zones)
 
 # Example dictionary
 PERIODS = {
@@ -60,8 +61,8 @@ class TraderModel(model_config.ModelConfig):
     MODEL = 'gpt-4o'
     MAX_TOKENS = 2000
     CONTEXT_WINDOW = 8192
-    TEMPERATURE = 0.3  # Keep outputs deterministic for scoring and ranking
-    RESPONSE_TOKENS = 1500  # Ensure response fits within limits
+    TEMPERATURE = 0.4  # Keep outputs deterministic for scoring and ranking
+    RESPONSE_TOKENS = 500  # Ensure response fits within limits
     FREQUENCY_PENALTY = 0.0  # Avoid repetition in rationale
     PRESENCE_PENALTY = 0.3  # Encourage new ideas or highlighting unique patterns
 
@@ -296,6 +297,7 @@ class LlmTrader:
 
             fib_dict = calculate_auto_fibonacci(df, lookback_periods=[50])
             pp_dict = calculate_pivot_points(df, lookback_periods=[20])
+            fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
 
             merged_df = df.copy()
             if oi is not None:
@@ -314,7 +316,8 @@ class LlmTrader:
                 'timing_info': timing_data,
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
-                'pivot_points': pp_dict
+                'pivot_points': pp_dict,
+                'closest_fair_value_gaps_levels': fvg_dict
             }
         return result_data
 
