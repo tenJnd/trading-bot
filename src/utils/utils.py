@@ -377,6 +377,58 @@ def calculate_closest_fvg_zones(df, current_price, threshold_percentage=2.0):
     return result
 
 
+def calculate_regression_channels_with_slope(df, periods=[20], upper_dev=2, lower_dev=2):
+    """
+    Calculate linear regression channels for multiple periods, including slope.
+
+    Parameters:
+    - df: DataFrame with 'timestamp' and 'C' columns.
+    - periods: List of lookback periods to calculate regression channels.
+    - upper_dev: Upper deviation factor.
+    - lower_dev: Lower deviation factor.
+
+    Returns:
+    - Dictionary with period, direction, slope, upper, and lower bounds.
+    """
+    results = {}
+
+    for n in periods:
+        # Ensure we have enough data
+        if len(df) < n:
+            continue  # Skip periods longer than the dataset
+
+        # Extract the last n rows
+        window_df = df.iloc[-n:]
+        time = np.arange(len(window_df))  # Use indices as time variable
+        close_prices = window_df["C"]
+
+        # Calculate Linear Regression Line
+        m, b = np.polyfit(time, close_prices, 1)  # Slope and intercept
+        regression_line = m * time + b
+
+        # Calculate Standard Deviation of Residuals
+        residuals = close_prices - regression_line
+        std_dev = np.std(residuals)
+
+        # Upper and Lower Bounds
+        upper_bound = regression_line + upper_dev * std_dev
+        lower_bound = regression_line - lower_dev * std_dev
+
+        # Determine Direction
+        direction = "up" if m > 0 else "down"
+
+        # Save Results in Dictionary
+        results[n] = {
+            "period": n,
+            "direction": direction,
+            "slope": m,  # Slope of the trend
+            "upper": upper_bound[-1],  # Last value of upper bound
+            "lower": lower_bound[-1],  # Last value of lower bound
+        }
+
+    return results
+
+
 def calculate_atr(df, period=ATR_PERIOD):
     """
     Calculate the Average True Range (ATR) for given OHLCV DataFrame.

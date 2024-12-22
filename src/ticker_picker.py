@@ -61,7 +61,7 @@ class LlmTickerPicker(LlmTrader):
 
         for tic in tickers_data[0]:
             tic = calculate_indicators_for_llm_trader(tic)
-            tic_fib = calculate_auto_fibonacci(tic, lookback_periods=[50])
+            tic_fib = calculate_auto_fibonacci(tic, lookback_periods=[20])
 
             tic_last = tic.iloc[-1]
             ticker_list.append(tic_last)

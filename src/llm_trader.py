@@ -23,7 +23,7 @@ from src.utils.utils import (calculate_sma, round_series,
                              calculate_pivot_points, shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
-                             calculate_closest_fvg_zones)
+                             calculate_closest_fvg_zones, calculate_regression_channels_with_slope)
 
 # Example dictionary
 PERIODS = {
@@ -295,9 +295,10 @@ class LlmTrader:
             df = shorten_large_numbers(df, 'obv')
             df = shorten_large_numbers(df, 'obv_sma_20')
 
-            fib_dict = calculate_auto_fibonacci(df, lookback_periods=[50])
+            fib_dict = calculate_auto_fibonacci(df, lookback_periods=[20])
             pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
+            lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
 
             merged_df = df.copy()
             if oi is not None:
@@ -317,7 +318,8 @@ class LlmTrader:
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
                 'pivot_points': pp_dict,
-                'closest_fair_value_gaps_levels': fvg_dict
+                'closest_fair_value_gaps_levels': fvg_dict,
+                'linear_regression_channels': lin_reg
             }
         return result_data
 
