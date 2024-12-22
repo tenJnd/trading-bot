@@ -312,6 +312,71 @@ def calculate_pivot_points(df, lookback_periods=[5, 10]):
     return pivot_dict
 
 
+def calculate_closest_fvg_zones(df, current_price, threshold_percentage=2.0):
+    """
+    Detects and returns the closest significant bullish and bearish Fair Value Gaps (FVGs) to the current price
+    in a DataFrame containing OHLCV data, where significance is defined by a percentage threshold.
+
+    :param df: DataFrame containing OHLCV data with columns ['O', 'H', 'L', 'C', 'V']
+    :param current_price: The current price around which the closest FVGs are to be identified.
+    :param threshold_percentage: The minimum percentage difference required for an FVG to be considered significant.
+    :return: Dictionary with closest significant bullish and bearish FVG details.
+    """
+    df = df.tail(100)
+    # Initialize list to store FVG zones and variables to track the closest FVGs
+    closest_bullish = None
+    closest_bearish = None
+    min_bullish_distance = float('inf')
+    min_bearish_distance = float('inf')
+
+    # Iterate over the DataFrame
+    for i in range(2, len(df)):
+        prev_high = df['H'].iloc[i - 2]
+        prev_low = df['L'].iloc[i - 2]
+        curr_high = df['H'].iloc[i]
+        curr_low = df['L'].iloc[i]
+
+        # Calculate the percentage difference for bullish and bearish FVG candidates
+        bullish_percentage_diff = ((curr_low - prev_high) / prev_high) * 100
+        bearish_percentage_diff = ((prev_low - curr_high) / curr_high) * 100
+
+        # Detect Bullish FVG with threshold
+        if bullish_percentage_diff > threshold_percentage:
+            fvg = {
+                "type": "bullish",
+                "upper_bound": curr_low,
+                "lower_bound": prev_high,
+                "start_index": i - 2,
+                "end_index": i
+            }
+            distance = abs(current_price - curr_low)
+            if distance < min_bullish_distance:
+                min_bullish_distance = distance
+                closest_bullish = fvg
+
+        # Detect Bearish FVG with threshold
+        if bearish_percentage_diff > threshold_percentage:
+            fvg = {
+                "type": "bearish",
+                "upper_bound": prev_low,
+                "lower_bound": curr_high,
+                "start_index": i - 2,
+                "end_index": i
+            }
+            distance = abs(current_price - prev_low)
+            if distance < min_bearish_distance:
+                min_bearish_distance = distance
+                closest_bearish = fvg
+
+    # Prepare the result dictionary
+    result = {
+        "bullish": closest_bullish,
+        "bearish": closest_bearish
+    }
+
+    return result
+
+
 def calculate_atr(df, period=ATR_PERIOD):
     """
     Calculate the Average True Range (ATR) for given OHLCV DataFrame.
@@ -415,7 +480,8 @@ def calculate_indicators_for_llm_trader(df):
     df['rsi_14'] = calculate_rsi(df, period=14)
     df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
     df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
-    df['bb_middle_20'], df['bb_upper_20'], df['bb_lower_20'] = calculate_bollinger_bands(df)
+    df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
+        'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
     df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
     df['adx_20'] = calculate_adx(df, n_periods=20)
     df['obv'] = round_series(calculate_obv(df), 0)
