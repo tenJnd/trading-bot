@@ -298,7 +298,7 @@ class LlmTrader:
             fib_dict = calculate_auto_fibonacci(df, lookback_periods=[20])
             pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
-            lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
+            # lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
 
             merged_df = df.copy()
             if oi is not None:

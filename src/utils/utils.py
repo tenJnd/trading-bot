@@ -522,19 +522,19 @@ def shorten_large_numbers(df, column_name):
 
 def calculate_indicators_for_llm_trader(df):
     df['atr_20'] = calculate_atr(df, period=20)
-    df['atr_50'] = calculate_atr(df, period=50)
+    # df['atr_50'] = calculate_atr(df, period=50)
     df['sma_20'] = calculate_sma(df, period=20)
     df['sma_50'] = calculate_sma(df, period=50)
     df['sma_100'] = calculate_sma(df, period=100)
     df['sma_200'] = calculate_sma(df, period=200)
-    df['vol_sma_20'] = calculate_sma(df, period=20, column='V')
-    df['vol_sma_50'] = calculate_sma(df, period=50, column='V')
+    # df['vol_sma_20'] = calculate_sma(df, period=20, column='V')
+    # df['vol_sma_50'] = calculate_sma(df, period=50, column='V')
     df['rsi_14'] = calculate_rsi(df, period=14)
     df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
     df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
     df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
         'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
-    df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
+    # df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
     df['adx_20'] = calculate_adx(df, n_periods=20)
     df['obv'] = round_series(calculate_obv(df), 0)
     df['obv_sma_20'] = round_series(calculate_sma(df, period=20, column='obv'), 0)
