@@ -51,7 +51,6 @@ Your goals:
        - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
        - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., ATR, SMA, RSI, MACD).
        - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
-       - **Pivot Points**: A dictionary of pivot points and support/resistance levels (`pivot_points`).
      - **1d** (contextual timeframe): Includes:
        - Same data structure as the 4h timeframe but used only for broader context (e.g., trend confirmation, key levels).
    - **Current Funding Rate**: The latest funding rate for the asset (`current_funding_rate`).

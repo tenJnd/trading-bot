@@ -158,13 +158,13 @@ def turtle_trading_signals_adjusted(df):
 def calculate_sma(df, period=20, column='C'):
     """Simple Moving Average (SMA)"""
     sma = df[column].rolling(window=period).mean()
-    return round_series(sma)
+    return round_series(sma, precision=4)
 
 
 def calculate_ema(df, period=20, column='C'):
     """Exponential Moving Average (EMA)"""
     ema = df[column].ewm(span=period, adjust=False).mean()
-    return round_series(ema)
+    return round_series(ema, precision=4)
 
 
 def calculate_rsi(df, period=14, column='C'):
@@ -246,14 +246,14 @@ def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
             fib_type = "retracement"
             fib_levels = [0, 23.6, 38.2, 50.0, 61.8, 100]
             fib_values = {
-                f'fib_{level}': dynamic_safe_round(swing_high - (swing_high - swing_low) * (level / 100))
+                f'fib_{level}': swing_high - (swing_high - swing_low) * (level / 100)
                 for level in fib_levels
             }
         elif current_close >= swing_high:
             fib_type = "extension"
             fib_levels = [100, 123.6, 138.2, 150.0, 161.8, 200]
             fib_values = {
-                f'fib_{level}': dynamic_safe_round(swing_high + (swing_high - swing_low) * ((level - 100) / 100))
+                f'fib_{level}': swing_high + (swing_high - swing_low) * ((level - 100) / 100)
                 for level in fib_levels
             }
         else:
