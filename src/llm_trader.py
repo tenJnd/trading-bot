@@ -609,7 +609,10 @@ class LlmTrader:
                    f"Trade results: {last_trade}")
 
         elif agent_action.action == 'cancel':
-            order = self._exchange.cancel_order(agent_action.order_id)
+            order = self._exchange.cancel_order(
+                order_id=agent_action.order_id,
+                symbol=self._exchange.market_futures
+            )
 
         _logger.info(msg)
         if agent_action.action == 'hold':

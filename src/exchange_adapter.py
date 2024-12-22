@@ -429,8 +429,8 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def cancel_order(self, order_id: str):
-        return self._exchange.cancel_order(order_id)
+    def cancel_order(self, order_id: str, symbol=None):
+        return self._exchange.cancel_order(order_id, symbol)
 
     def _set_leverage(self, leverage):
         try:
