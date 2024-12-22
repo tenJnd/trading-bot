@@ -319,7 +319,7 @@ class LlmTrader:
                 'fib_levels': fib_dict,
                 'pivot_points': pp_dict,
                 'closest_fair_value_gaps_levels': fvg_dict,
-                'linear_regression_channels': lin_reg
+                # 'linear_regression_channels': lin_reg
             }
         return result_data
 
