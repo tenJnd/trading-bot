@@ -91,7 +91,7 @@ class LlmTrader:
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
-    df_tail_for_agent = 15
+    df_tail_for_agent = 20
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -298,7 +298,9 @@ class LlmTrader:
 
             if timeframe == '1d':
                 fib_depth = 10
+                tail = self.df_tail_for_agent / 2
             else:
+                tail = self.df_tail_for_agent
                 fib_depth = 20
 
             fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
@@ -311,7 +313,7 @@ class LlmTrader:
                 merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
 
             merged_df = merged_df.drop(['datetime'], axis=1)
-            df_tail = merged_df.tail(self.df_tail_for_agent)
+            df_tail = merged_df.tail(tail)
             price_data_csv = df_tail.to_csv()
 
             timing_data = self.get_timing_info(last_candle_timestamp)
