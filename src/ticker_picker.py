@@ -9,7 +9,7 @@ from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from src.llm_trader import LlmTrader
 from src.prompts import ticker_picker_prompt
 from src.utils.utils import StrategySettingsModel, calculate_indicators_for_llm_trader, \
-    calculate_auto_fibonacci, turtle_trading_signals_adjusted
+    turtle_trading_signals_adjusted, calculate_fib_levels_pivots
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=SLACK_URL, username='turtle_trader')
@@ -61,7 +61,7 @@ class LlmTickerPicker(LlmTrader):
 
         for tic in tickers_data[0]:
             tic = calculate_indicators_for_llm_trader(tic)
-            tic_fib = calculate_auto_fibonacci(tic, lookback_periods=[20])
+            tic_fib = calculate_fib_levels_pivots(tic)
 
             tic_last = tic.iloc[-1]
             ticker_list.append(tic_last)

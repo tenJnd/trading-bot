@@ -19,11 +19,11 @@ from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
 from src.utils.utils import (calculate_sma, round_series,
-                             calculate_auto_fibonacci,
+                             calculate_auto_fibonacci_simple_period,
                              shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
-                             calculate_closest_fvg_zones, save_total_balance)
+                             calculate_closest_fvg_zones, save_total_balance, calculate_fib_levels_pivots)
 
 # Example dictionary
 PERIODS = {
@@ -298,11 +298,7 @@ class LlmTrader:
             df = shorten_large_numbers(df, 'obv')
             df = shorten_large_numbers(df, 'obv_sma_20')
 
-            fib_periods = [50]
-            if timeframe == '1d':
-                fib_periods = [20]
-
-            fib_dict = calculate_auto_fibonacci(df, lookback_periods=fib_periods)
+            fib_dict = calculate_fib_levels_pivots(df)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
             # lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
@@ -321,7 +317,6 @@ class LlmTrader:
                 'timing_info': timing_data,
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
-                # 'pivot_points': pp_dict,
                 'closest_fair_value_gaps_levels': fvg_dict,
                 # 'linear_regression_channels': lin_reg
             }
@@ -628,7 +623,7 @@ class LlmTrader:
             _notifier.info(f':bangbang: {msg}', echo='here')
 
         save_total_balance(
-            timestamp=self.last_candle_timestamp,
+            timestamp=str(self.last_candle_timestamp),
             exchange_id=self._exchange.exchange_id,
             total_balance=self._exchange.total_balance,
             sub_account_id=self.strategy_settings.sub_account_id

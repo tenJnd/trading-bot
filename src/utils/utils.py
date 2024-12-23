@@ -224,7 +224,7 @@ def calculate_stochastic_oscillator(df, period=14, smooth_k=3, smooth_d=3):
     return round_series(k_smooth), round_series(d)
 
 
-def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
+def calculate_auto_fibonacci_simple_period(df, lookback_periods=[5, 10]):
     """
     Calculate Fibonacci retracement or extension levels for multiple periods.
 
@@ -567,6 +567,52 @@ def time_ago_string(timestamp_created: datetime) -> str:
     else:
         days = int(seconds // 86400)
         return f"{days} day{'s' if days > 1 else ''} ago"
+
+
+def find_pivots(df, depth, deviation):
+    """Identifies pivot highs and lows in a DataFrame based on ZigZag methodology."""
+    atr: pd.Series = calculate_atr(df, period=depth)
+    deviation_threshold = atr / df['C'] * 100 * deviation
+
+    high_deviation = df['H'] > (df['H'].shift(1) + deviation_threshold)
+    low_deviation = df['L'] < (df['L'].shift(1) - deviation_threshold)
+
+    pivot_highs = (df['H'].rolling(window=depth, center=True).max() == df['H']) & high_deviation
+    pivot_lows = (df['L'].rolling(window=depth, center=True).min() == df['L']) & low_deviation
+
+    df['Pivot'] = np.where(pivot_highs, df['H'], np.where(pivot_lows, df['L'], np.nan))
+
+    return df.dropna(subset=['Pivot'])
+
+
+def calculate_fib_levels_pivots(df, pivot_col='Pivot', depth=20, deviation=3):
+    """Calculate Fibonacci retracement levels from the pivot points."""
+    pivots = find_pivots(df, depth, deviation)
+    last_pivot_high = pivots[pivots[pivot_col] == pivots['H']].last_valid_index()
+    last_pivot_low = pivots[pivots[pivot_col] == pivots['L']].last_valid_index()
+
+    if pd.notna(last_pivot_high) and pd.notna(last_pivot_low):
+        pivot_high_price = pivots.at[last_pivot_high, 'H']
+        pivot_low_price = pivots.at[last_pivot_low, 'L']
+
+        # Determine trend
+        if last_pivot_high < last_pivot_low:
+            start_price = pivot_low_price
+            end_price = pivot_high_price
+        else:
+            start_price = pivot_high_price
+            end_price = pivot_low_price
+
+        # Fibonacci levels calculation
+        levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
+        fib_levels = {f"fib_{level}": start_price + (end_price - start_price) * level for level in levels}
+        fib_levels['swing_high'] = pivot_high_price
+        fib_levels['swing_low'] = pivot_low_price
+        fib_levels['depth'] = depth
+        fib_levels['deviation'] = deviation
+        return fib_levels
+
+    return "Not enough pivot data to calculate Fibonacci levels"
 
 
 def save_total_balance(timestamp, exchange_id, total_balance, sub_account_id):
