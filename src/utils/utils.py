@@ -575,7 +575,7 @@ def time_ago_string(timestamp_created: datetime) -> str:
 def find_pivots(df, depth, deviation):
     """Identifies pivot highs and lows in a DataFrame based on ZigZag methodology."""
     atr: pd.Series = calculate_atr(df, period=depth)
-    deviation_threshold = atr / df['C'] * deviation
+    deviation_threshold = atr / df['C'] * (deviation / 100)
 
     high_deviation = df['H'] > (df['H'].shift(1) + deviation_threshold)
     low_deviation = df['L'] < (df['L'].shift(1) - deviation_threshold)
