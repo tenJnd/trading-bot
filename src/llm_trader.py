@@ -165,7 +165,7 @@ class LlmTrader:
         _logger.info("getting exchange settings...")
         free_balance = round(self._exchange.free_balance, 0)
         total_balance = round(self._exchange.total_balance, 0)
-        max_amount = dynamic_safe_round(free_balance * 0.9 / self.last_close_price, 2)
+        max_amount = dynamic_safe_round(free_balance / self.last_close_price, 2)
         return {
             'min_cost': self._exchange.min_cost,
             'min_amount': self._exchange.min_amount,
@@ -370,7 +370,7 @@ class LlmTrader:
                             "type": "string",
                             "enum": ["limit", "market"],
                             "description": "The type of order to place. Required for 'long' or 'short'."
-                        },  # TODO: amount outside of agent scope
+                        },
                         "amount": {
                             "type": ["number", "null"],
                             "description": "The amount for the position or order."
@@ -451,6 +451,10 @@ class LlmTrader:
         """ add all the 'before call conditions/constrains here """
         max_amount = self.exchange_settings.get('max_amount_based_on_free_capital', 0)
         min_amount = self.exchange_settings.get('min_amount', 0)
+
+        if self.opened_orders or self.opened_positions:
+            _logger.info("No constrains, can call the agent...")
+            return
 
         if min_amount > max_amount:
             raise ConditionVerificationError(f'min amount ({min_amount}) > '
