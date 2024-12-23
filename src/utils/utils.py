@@ -325,6 +325,8 @@ def calculate_closest_fvg_zones(df, current_price, threshold_percentage=2.0):
     :param threshold_percentage: The minimum percentage difference required for an FVG to be considered significant.
     :return: Dictionary with closest significant bullish and bearish FVG details.
     """
+    df = df.copy()
+    df = df[:-1]
     df = df.tail(100)
     # Initialize list to store FVG zones and variables to track the closest FVGs
     closest_bullish = None
@@ -583,13 +585,15 @@ def find_pivots(df, depth, deviation):
     pivot_highs = (df['H'].rolling(window=depth, center=True).max() == df['H']) & high_deviation
     pivot_lows = (df['L'].rolling(window=depth, center=True).min() == df['L']) & low_deviation
 
-    df['Pivot'] = np.where(pivot_highs, df['H'], np.where(pivot_lows, df['L'], np.nan))
+    df['pivot'] = np.where(pivot_highs, df['H'], np.where(pivot_lows, df['L'], np.nan))
 
-    return df.dropna(subset=['Pivot'])
+    return df.dropna(subset=['pivot'])
 
 
-def calculate_fib_levels_pivots(df, pivot_col='Pivot', depth=20, deviation=2):
+def calculate_fib_levels_pivots(df, pivot_col='pivot', depth=20, deviation=2):
     """Calculate Fibonacci retracement levels from the pivot points."""
+    df = df.copy()
+    df = df[:-1]
     pivots = find_pivots(df, depth, deviation)
     last_pivot_high = pivots[pivots[pivot_col] == pivots['H']].last_valid_index()
     last_pivot_low = pivots[pivots[pivot_col] == pivots['L']].last_valid_index()
