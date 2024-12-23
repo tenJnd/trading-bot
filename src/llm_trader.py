@@ -133,20 +133,23 @@ class LlmTrader:
         }
 
     def get_last_agent_output(self):
-        with self._database.session_manager() as session:
-            last_agent_action = (
-                session.query(
-                    AgentActions.agent_output,
-                    AgentActions.timestamp_created,
-                    AgentActions.candle_timestamp
+        if self.opened_orders or self.opened_positions:
+            with self._database.session_manager() as session:
+                last_agent_action = (
+                    session.query(
+                        AgentActions.agent_output,
+                        AgentActions.timestamp_created,
+                        AgentActions.candle_timestamp
+                    )
+                    .filter(AgentActions.strategy_id == self.strategy_settings.id)
+                    .order_by(desc(AgentActions.timestamp_created))
+                    .first()  # Get the most recent record
                 )
-                .filter(AgentActions.strategy_id == self.strategy_settings.id)
-                .order_by(desc(AgentActions.timestamp_created))
-                .first()  # Get the most recent record
-            )
 
-        # If there's no record, return None
-        if not last_agent_action:
+            # If there's no record, return None
+            if not last_agent_action:
+                return None
+        else:
             return None
 
         # Unpack the tuple and return as a dictionary
@@ -302,6 +305,7 @@ class LlmTrader:
             fib_dict = calculate_auto_fibonacci(df, lookback_periods=fib_periods)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
+            # lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
 
             merged_df = df.copy()
             if oi is not None:
@@ -340,7 +344,7 @@ class LlmTrader:
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
             # 'last_closed_trade': self.trade_history,
-            # 'last_agent_output': self.last_agent_output,
+            'last_agent_output': self.last_agent_output,
             # 'exchange_settings': self.exchange_settings
         }
 

@@ -56,7 +56,10 @@ Your goals:
    - **Current Funding Rate**: The latest funding rate for the asset (`current_funding_rate`).
 2. **Open Positions**: Details of active positions.
 3. **Open Orders**: Details of unfilled limit orders.
-4. **Previous Output (if provided)**:
+4. **Last Trade-able Agent Output (if provided)**:
+   - The last output from the agent that resulted in a tradeable action (e.g., long, short), excluding 'hold' actions.
+   - Provided only when there are open positions or open orders, allowing the agent to align its decisions with its most recent tradeable action.
+5. **Previous Error Agent Output (if provided)**:
    - Includes **validation_error** and **required_correction** for refining decisions.
 
 ---
