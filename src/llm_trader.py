@@ -298,7 +298,7 @@ class LlmTrader:
 
             if timeframe == '1d':
                 fib_depth = 10
-                tail = self.df_tail_for_agent / 2
+                tail = int(self.df_tail_for_agent / 2)
             else:
                 tail = self.df_tail_for_agent
                 fib_depth = 20
