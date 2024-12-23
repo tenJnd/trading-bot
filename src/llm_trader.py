@@ -553,7 +553,7 @@ class LlmTrader:
 
         # Calculate the potential risk per trade
         move_against = abs(agent_action.stop_loss - c_price)
-        trade_risk_cap = self._exchange.free_balance * 0.02  # 2% risk per trade
+        trade_risk_cap = self._exchange.free_balance * 0.01  # 1% risk per trade
         raw_amount = trade_risk_cap / move_against
 
         # Check if the raw amount is below the exchange's minimum tradable amount
