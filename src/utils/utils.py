@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import os
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ from src.config import TRADING_DATA_DIR, ATR_PERIOD, TURTLE_ENTRY_DAYS, TURTLE_E
 from src.model import trader_database
 from src.model.turtle_model import StrategySettings, BalanceReport
 from src.schemas.turtle_schema import OrderSchema
+
+_logger = logging.getLogger(__name__)
 
 
 def significant_round(num, places):
@@ -572,7 +575,7 @@ def time_ago_string(timestamp_created: datetime) -> str:
 def find_pivots(df, depth, deviation):
     """Identifies pivot highs and lows in a DataFrame based on ZigZag methodology."""
     atr: pd.Series = calculate_atr(df, period=depth)
-    deviation_threshold = atr / df['C'] * 100 * deviation
+    deviation_threshold = atr / df['C'] * deviation
 
     high_deviation = df['H'] > (df['H'].shift(1) + deviation_threshold)
     low_deviation = df['L'] < (df['L'].shift(1) - deviation_threshold)
@@ -585,7 +588,7 @@ def find_pivots(df, depth, deviation):
     return df.dropna(subset=['Pivot'])
 
 
-def calculate_fib_levels_pivots(df, pivot_col='Pivot', depth=20, deviation=3):
+def calculate_fib_levels_pivots(df, pivot_col='Pivot', depth=20, deviation=2):
     """Calculate Fibonacci retracement levels from the pivot points."""
     pivots = find_pivots(df, depth, deviation)
     last_pivot_high = pivots[pivots[pivot_col] == pivots['H']].last_valid_index()
@@ -612,7 +615,8 @@ def calculate_fib_levels_pivots(df, pivot_col='Pivot', depth=20, deviation=3):
         fib_levels['deviation'] = deviation
         return fib_levels
 
-    return "Not enough pivot data to calculate Fibonacci levels"
+    _logger.warning(f"Count not calculate FIB dict")
+    return None
 
 
 def save_total_balance(timestamp, exchange_id, total_balance, sub_account_id):

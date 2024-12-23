@@ -64,15 +64,18 @@ class LlmTickerPicker(LlmTrader):
             tic_fib = calculate_fib_levels_pivots(tic)
 
             tic_last = tic.iloc[-1]
+            if not tic_fib:
+                _logger.warning(f"No fib dict calculated for {tic_last.ticker}")
+                continue
+
             ticker_list.append(tic_last)
 
             ticker_symbol = tic_last.ticker
             close_price = tic_last.C
 
-            for fib in tic_fib:
-                fib['ticker'] = ticker_symbol
-                fib['C'] = close_price
-                fib_list.append(fib)
+            tic_fib['ticker'] = ticker_symbol
+            tic_fib['C'] = close_price
+            fib_list.append(tic_fib)
 
         all_df = pd.DataFrame(ticker_list)
         all_fib_df = pd.DataFrame(fib_list)

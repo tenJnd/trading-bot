@@ -19,11 +19,13 @@ from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
 from src.utils.utils import (calculate_sma, round_series,
-                             calculate_auto_fibonacci_simple_period,
                              shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
                              calculate_closest_fvg_zones, save_total_balance, calculate_fib_levels_pivots)
+
+_logger = logging.getLogger(__name__)
+_notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
 
 # Example dictionary
 PERIODS = {
@@ -47,10 +49,6 @@ def get_next_key(base_key):
         raise ValueError(f"No key exists after '{base_key}'")
 
     return next_key
-
-
-_logger = logging.getLogger(__name__)
-_notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
 
 
 class ValidationError(Exception):
@@ -298,7 +296,12 @@ class LlmTrader:
             df = shorten_large_numbers(df, 'obv')
             df = shorten_large_numbers(df, 'obv_sma_20')
 
-            fib_dict = calculate_fib_levels_pivots(df)
+            if timeframe == '1d':
+                fib_depth = 10
+            else:
+                fib_depth = 20
+
+            fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
             # lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
