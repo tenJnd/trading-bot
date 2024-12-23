@@ -123,9 +123,12 @@ class LlmTrader:
                            ):
         return cls(exchange=exchange, strategy_settings=strategy_settings, db=db, load_data=False)
 
-    def get_timing_info(self, last_candle_timestamp):
+    def get_timing_info(self, timeframe, last_candle_timestamp):
+        if not timeframe:
+            timeframe = self.strategy_settings.timeframe
+
         return {
-            'candle_timeframe': self.strategy_settings.timeframe,
+            'candle_timeframe': timeframe,
             'candle_timestamp': last_candle_timestamp,
             'current_timestamp': int(datetime.now().timestamp()),
         }
@@ -284,11 +287,11 @@ class LlmTrader:
             oi = self.preprocess_open_interest(timeframe=timeframe)
             df = self.get_ohcl_data(buffer_days=buffer_days, timeframe=timeframe)
 
-            last_close_price = df.iloc[-1]['C']
+            self.last_close_price = df.iloc[-1]['C']
             last_candle_timestamp = df.iloc[-1]['timeframe']
-            self.last_close_price = last_close_price if not self.last_close_price else last_close_price
-            self.last_candle_timestamp = last_candle_timestamp if not self.last_candle_timestamp \
-                else last_candle_timestamp
+
+            if timeframe == self.strategy_settings.timeframe:
+                self.last_candle_timestamp = df.iloc[-1]['timeframe']
 
             df.set_index('timeframe', inplace=True)
             df = self._calculate_indicators_for_llm_trader(df)
@@ -316,7 +319,7 @@ class LlmTrader:
             df_tail = merged_df.tail(tail)
             price_data_csv = df_tail.to_csv()
 
-            timing_data = self.get_timing_info(last_candle_timestamp)
+            timing_data = self.get_timing_info(timeframe, last_candle_timestamp)
 
             result_data[timeframe] = {
                 'timing_info': timing_data,
