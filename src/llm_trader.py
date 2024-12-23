@@ -491,8 +491,8 @@ class LlmTrader:
                 error_messages.append(
                     f"Invalid R:R ratio. R:R is less than 0.9 for {agent_action.action} action. "
                     f"Current R:R = {rr_ratio:.2f}."
-                    f" Adjust take-profit (support/resistance further from price/limit-price)"
-                    f" or stop-loss (resistance/support closer to price/limit-price) to ensure R:R >= 0.9."
+                    f" Adjust take-profit (place tp near support/resistance further from price/limit-price)"
+                    f" or stop-loss (place sl near resistance/support closer to price/limit-price) to ensure R:R >= 0.9."
                 )
 
         # Price validation for long positions
