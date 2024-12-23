@@ -246,7 +246,7 @@ def calculate_auto_fibonacci(df, lookback_periods=[5, 10]):
             fib_type = "retracement"
             fib_levels = [0, 23.6, 38.2, 50.0, 61.8, 100]
             fib_values = {
-                f'fib_{level}': swing_high - (swing_high - swing_low) * (level / 100)
+                f'fib_{level}': swing_low + (swing_high - swing_low) * (level / 100)
                 for level in fib_levels
             }
         elif current_close >= swing_high:
