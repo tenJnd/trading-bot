@@ -11,7 +11,7 @@ import pandas as pd
 
 from src.config import TRADING_DATA_DIR, ATR_PERIOD, TURTLE_ENTRY_DAYS, TURTLE_EXIT_DAYS
 from src.model import trader_database
-from src.model.turtle_model import StrategySettings
+from src.model.turtle_model import StrategySettings, BalanceReport
 from src.schemas.turtle_schema import OrderSchema
 
 
@@ -567,6 +567,27 @@ def time_ago_string(timestamp_created: datetime) -> str:
     else:
         days = int(seconds // 86400)
         return f"{days} day{'s' if days > 1 else ''} ago"
+
+
+def save_total_balance(timestamp, exchange_id, total_balance, sub_account_id):
+    with trader_database.session_manager() as session:
+        exists_query = session.query(
+            session.query(BalanceReport.candle_timestamp).filter(
+                BalanceReport.exchange_id == exchange_id,
+                BalanceReport.candle_timestamp == timestamp,
+                BalanceReport.sub_account_id == sub_account_id
+            ).exists()
+        ).scalar()
+
+        if not exists_query:
+            balance_report_obj = BalanceReport(
+                candle_timestamp=timestamp,
+                exchange_id=exchange_id,
+                value=total_balance,
+                sub_account_id=sub_account_id
+            )
+            session.add(balance_report_obj)
+            session.commit()
 
 
 @dataclass

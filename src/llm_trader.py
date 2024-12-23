@@ -23,7 +23,7 @@ from src.utils.utils import (calculate_sma, round_series,
                              shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
-                             calculate_closest_fvg_zones)
+                             calculate_closest_fvg_zones, save_total_balance)
 
 # Example dictionary
 PERIODS = {
@@ -626,6 +626,13 @@ class LlmTrader:
         else:
             self.save_agent_action(agent_action, order)
             _notifier.info(f':bangbang: {msg}', echo='here')
+
+        save_total_balance(
+            timestamp=self.last_candle_timestamp,
+            exchange_id=self._exchange.exchange_id,
+            total_balance=self._exchange.total_balance,
+            sub_account_id=self.strategy_settings.sub_account_id
+        )
 
     def save_agent_action(self, agent_action: AgentAction, order=None):
         _logger.info("Saving agent action...")
