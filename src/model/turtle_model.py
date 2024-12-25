@@ -109,9 +109,9 @@ class BalanceReport(TurtleBase):
     __tablename__ = 'balance_report'
 
     id = Column(Integer, primary_key=True)
-    candle_timestamp = Column(String)
     exchange_id = Column(String)
     timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    date = Column(String)
     value = Column(Float)
     sub_account_id = Column(String, default=None)
 
