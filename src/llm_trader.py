@@ -639,7 +639,6 @@ class LlmTrader:
             _notifier.info(f':bangbang: {msg}', echo='here')
 
         save_total_balance(
-            timestamp=str(self.last_candle_timestamp),
             exchange_id=self._exchange.exchange_id,
             total_balance=self._exchange.total_balance,
             sub_account_id=self.strategy_settings.sub_account_id
