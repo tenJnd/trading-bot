@@ -424,9 +424,10 @@ class LlmTrader:
 
     def call_agent_w_validation(self):
         counter = 1
+        tries = 3
         agent_action = None
 
-        while counter < 3:
+        while counter <= tries:
             try:
                 agent_action = self.call_agent()
                 self.check_trade_valid(agent_action)
@@ -440,10 +441,15 @@ class LlmTrader:
 
                 previous_output_dict = {
                     'previous_agent_action': agent_action,
-                    'error': exc
+                    'error': str(exc)
                 }
                 self.llm_input_data['previous_output'] = previous_output_dict
                 counter += 1
+
+        # If the loop exits without breaking (all attempts failed), raise an error
+        if counter > tries:
+            raise RuntimeError(f"Validation failed after {tries} attempts. Last agent action: "
+                               f"{getattr(agent_action, 'nice_print', lambda: '<unknown>')()}")
 
         return agent_action
 
@@ -557,7 +563,7 @@ class LlmTrader:
 
         # Calculate the potential risk per trade
         move_against = abs(agent_action.stop_loss - c_price)
-        trade_risk_cap = self._exchange.free_balance * 0.01  # 1% risk per trade
+        trade_risk_cap = (self._exchange.free_balance * 0.9) * 0.01  # 1% risk per trade
         raw_amount = trade_risk_cap / move_against
 
         # Check if the raw amount is below the exchange's minimum tradable amount
