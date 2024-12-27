@@ -85,6 +85,41 @@ class AgentAction:
         d = asdict(self)
         return '\n'.join([f"{k}: {v}" for k, v in d.items() if v is not None])
 
+    @property
+    def is_long(self):
+        return self.action == 'long'
+
+    @property
+    def is_short(self):
+        return self.action == 'short'
+
+    @property
+    def is_entry(self):
+        return self.action in ['long', 'short']
+
+    @property
+    def is_close(self):
+        return self.action == 'close'
+
+    @property
+    def is_cancel(self):
+        return self.action == 'cancel'
+
+    @property
+    def is_hold(self):
+        return self.action == 'hold'
+
+    def rr_ratio(self, close_price):
+        take_profit = self.take_profit
+        if self.is_long:
+            take_profit = take_profit or int('inf')
+        if self.is_short:
+            take_profit = take_profit or 0
+
+        move_against = abs(self.stop_loss - close_price)
+        move_in_favour = abs(take_profit - close_price)
+        return move_in_favour / move_against
+
 
 class LlmTrader:
     agent_name = 'llm_trader'
@@ -482,34 +517,26 @@ class LlmTrader:
         Raises:
             ValidationError: If R:R ratio is invalid or prices do not align with the trade direction.
         """
-        if agent_action.action not in ['long', 'short']:
+        if not agent_action.is_entry:
             return agent_action
 
         last_close = self._exchange.get_close_price()
-
-        # Determine the current price (use entry price if provided, otherwise last close price)
         c_price = agent_action.entry_price if agent_action.entry_price else last_close
 
         # Initialize error messages list
         error_messages = []
 
-        # Calculate moves for R:R ratio validation
-        move_against = abs(agent_action.stop_loss - c_price)
-        move_in_favour = abs(agent_action.take_profit - c_price) if agent_action.take_profit else None
-
-        # Validate R:R ratio
-        if move_in_favour:
-            rr_ratio = move_in_favour / move_against
-            if rr_ratio < 0.9:
-                error_messages.append(
-                    f"Invalid R:R ratio. R:R is less than 0.9 for {agent_action.action} action. "
-                    f"Current R:R = {rr_ratio:.2f}."
-                    f" Adjust take-profit (place tp near support/resistance further from price/limit-price)"
-                    f" or stop-loss (place sl near resistance/support closer to price/limit-price) to ensure R:R >= 0.9."
-                )
+        rr_ratio = agent_action.rr_ratio(c_price)
+        if rr_ratio < 1:
+            error_messages.append(
+                f"Invalid R:R ratio. R:R is less than 1 for {agent_action.action} action. "
+                f"Current R:R = {rr_ratio:.2f}."
+                f" Adjust take-profit (place tp near support/resistance further from price/limit-price)"
+                f" or stop-loss (place sl near resistance/support closer to price/limit-price) to ensure R:R >= 1."
+            )
 
         # Price validation for long positions
-        if agent_action.action == "long":
+        if agent_action.is_long:
             if not (agent_action.stop_loss < c_price < (agent_action.take_profit or float('inf'))):
                 error_messages.append(
                     f"Invalid price logic for long position: stop-loss ({agent_action.stop_loss}) must be below entry price ({c_price}), "
@@ -525,7 +552,7 @@ class LlmTrader:
                     )
 
         # Price validation for short positions
-        if agent_action.action == "short":
+        if agent_action.is_short:
             if not (agent_action.stop_loss > c_price > (agent_action.take_profit or 0)):
                 error_messages.append(
                     f"Invalid price logic for short position: stop-loss ({agent_action.stop_loss}) must be above entry price ({c_price}), "
@@ -608,43 +635,39 @@ class LlmTrader:
                 f"strategy_id: {self.strategy_settings.id}\n"
                 f"{agent_action.nice_print()}")
 
-    def trade(self):
-        self.pre_check_constrains()
-        agent_action = self.call_agent_w_validation()
-
-        if agent_action.action in ['long', 'short']:
-            agent_action = self.calculate_amount(agent_action)
-
-        if agent_action is None:
-            return
-
-        msg = self.format_log(agent_action)
-
+    def process_non_hold_action(self, agent_action):
         order = None
-        if agent_action.action in ['long', 'short']:
+        if agent_action.is_entry:
+            agent_action = self.calculate_amount(agent_action)
+            if agent_action is None:
+                return
+
             order = self._exchange.order(action_key=agent_action.action,
                                          amount=agent_action.amount,
                                          limit_price=agent_action.entry_price,
                                          stop_loss=agent_action.stop_loss,
                                          take_profit=agent_action.take_profit)
-        elif agent_action.action == 'close':
+        elif agent_action.is_close:
             order = self._exchange.order(agent_action.action, agent_action.amount)
-            last_trade = self.get_last_trade_data()
-            msg = (f":bangbang: {self.format_log(agent_action)}"
-                   f"Trade results: {last_trade}")
-
-        elif agent_action.action == 'cancel':
+        elif agent_action.is_cancel:
             order = self._exchange.cancel_order(
                 order_id=agent_action.order_id,
                 symbol=self._exchange.market_futures
             )
 
-        _logger.info(msg)
-        if agent_action.action == 'hold':
-            _notifier.info(msg)
+        self.save_agent_action(agent_action, order)
+        _notifier.info(f':bangbang: {self.format_log(agent_action)}', echo='here')
+
+    def trade(self):
+        self.pre_check_constrains()
+        agent_action = self.call_agent_w_validation()
+
+        if agent_action.is_hold:
+            _notifier.info(self.format_log(agent_action))
         else:
-            self.save_agent_action(agent_action, order)
-            _notifier.info(f':bangbang: {msg}', echo='here')
+            self.process_non_hold_action(agent_action)
+
+        _logger.info(self.format_log(agent_action))
 
         save_total_balance(
             exchange_id=self._exchange.exchange_id,
