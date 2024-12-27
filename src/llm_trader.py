@@ -520,7 +520,8 @@ class LlmTrader:
                 if agent_action.entry_price > last_close:
                     error_messages.append(
                         f"Invalid limit order price for long position: limit price ({agent_action.entry_price}) "
-                        f"is above the current close price ({last_close}). Adjust the limit price to be below the close price."
+                        f"is above the current close price ({last_close}). "
+                        f"Adjust the limit price to be below the close price or use market order"
                     )
 
         # Price validation for short positions
@@ -535,7 +536,8 @@ class LlmTrader:
                 if agent_action.entry_price < last_close:
                     error_messages.append(
                         f"Invalid limit order price for short position: limit price ({agent_action.entry_price}) "
-                        f"is below the current close price ({last_close}). Adjust the limit price to be above the close price."
+                        f"is below the current close price ({last_close}). "
+                        f"Adjust the limit price to be above the close price. or use market order"
                     )
 
         # Raise ValidationError with all issues if any exist
