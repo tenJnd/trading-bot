@@ -528,10 +528,10 @@ def shorten_large_numbers(df, column_name):
 def calculate_indicators_for_llm_trader(df):
     df['atr_20'] = calculate_atr(df, period=20)
     # df['atr_50'] = calculate_atr(df, period=50)
+    df['sma_10'] = calculate_sma(df, period=10)
     df['sma_20'] = calculate_sma(df, period=20)
     df['sma_50'] = calculate_sma(df, period=50)
     df['sma_100'] = calculate_sma(df, period=100)
-    df['sma_200'] = calculate_sma(df, period=200)
     # df['vol_sma_20'] = calculate_sma(df, period=20, column='V')
     # df['vol_sma_50'] = calculate_sma(df, period=50, column='V')
     df['rsi_14'] = calculate_rsi(df, period=14)
