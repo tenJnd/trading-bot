@@ -34,7 +34,7 @@ Your goals:
 
 ### **3. Dynamic Stop-Loss and Take-Profit**
 - Set **stop-loss** levels based on broader price movements and volatility (e.g., ATR or key support/resistance levels from the 1d timeframe) to avoid being stopped out by short-term fluctuations.
-- Use wider **take-profit** levels aligned with significant levels or trends, ensuring room for trades to develop over time.
+- Use wider **take-profit** levels aligned with significant levels or trends, ensuring room for trades to develop over time. **Take-profit is optional**; if not set, the agent can re-evaluate the position in the next run.
 
 ### **4. Focus on Execution Efficiency**
 - Prioritize execution over cautious analysis. Use the data provided to identify actionable trades and act promptly.
