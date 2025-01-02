@@ -626,16 +626,16 @@ def calculate_fib_levels_pivots(df, pivot_col='pivot', depth=20, deviation=2):
 def save_total_balance(exchange_id, total_balance, sub_account_id):
     date = str(datetime.now().date())  # Format: YYYY-MM-DD
     with trader_database.session_manager() as session:
-        # Check if a record already exists for the given date, exchange_id, and sub_account_id
-        exists_query = session.query(
-            session.query(BalanceReport).filter(
-                BalanceReport.date == date,
-                BalanceReport.exchange_id == exchange_id,
-                BalanceReport.sub_account_id == sub_account_id
-            ).exists()
-        ).scalar()
+        existing_record = session.query(BalanceReport).filter(
+            BalanceReport.date == date,
+            BalanceReport.exchange_id == exchange_id,
+            BalanceReport.sub_account_id == sub_account_id
+        ).one_or_none()
 
-        if not exists_query:
+        if existing_record:
+            # Update the existing record
+            existing_record.value = total_balance
+        else:
             # Create a new BalanceReport record
             balance_report_obj = BalanceReport(
                 date=date,  # Ensure date is saved in YYYY-MM-DD format
@@ -644,7 +644,7 @@ def save_total_balance(exchange_id, total_balance, sub_account_id):
                 sub_account_id=sub_account_id
             )
             session.add(balance_report_obj)
-            session.commit()
+        session.commit()
 
 
 @dataclass
