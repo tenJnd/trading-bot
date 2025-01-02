@@ -144,7 +144,7 @@ class LlmTickerPicker(LlmTrader):
             agent_action.action = 'ticker_pick'
 
             # Extract ticker and score from the list of dictionaries and filter them based on score > 85
-            high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 85]
+            high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 80]
 
             msg = (f"Ticker picker selection based on high score: {high_score_tickers}\n"
                    f"rationale: {agent_action.rationale}")

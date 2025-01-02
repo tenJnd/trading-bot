@@ -22,7 +22,7 @@ from src.utils.utils import (calculate_sma, round_series,
                              shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
-                             calculate_closest_fvg_zones, save_total_balance, calculate_fib_levels_pivots)
+                             calculate_closest_fvg_zones, calculate_fib_levels_pivots)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -668,12 +668,6 @@ class LlmTrader:
             self.process_non_hold_action(agent_action)
 
         _logger.info(self.format_log(agent_action))
-
-        save_total_balance(
-            exchange_id=self._exchange.exchange_id,
-            total_balance=self._exchange.total_balance,
-            sub_account_id=self.strategy_settings.sub_account_id
-        )
 
     def save_agent_action(self, agent_action: AgentAction, order=None):
         _logger.info("Saving agent action...")

@@ -12,7 +12,7 @@ from src.exchange_factory import ExchangeFactory
 from src.llm_trader import LlmTrader
 from src.ticker_picker import LlmTickerPicker, TickerPicker
 from src.utils.turtle_back_test import turtle_back_test
-from src.utils.utils import load_strategy_settings
+from src.utils.utils import load_strategy_settings, save_total_balance
 from turtle_trader import TurtleTrader
 
 _logger = logging.getLogger(__name__)
@@ -133,6 +133,12 @@ def llm_trade(exchange_id, tickers):
             trader = LlmTrader(exchange_adapter, strategy)
             exchange_adapter.fetch_balance()
             trader.trade()
+
+        save_total_balance(
+            exchange_id=exchange_id,
+            total_balance=exchange_adapter.total_balance,
+            sub_account_id=strategy_settings[0].sub_account_id
+        )
 
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
