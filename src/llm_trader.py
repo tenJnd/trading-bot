@@ -112,7 +112,7 @@ class AgentAction:
     def rr_ratio(self, close_price):
         take_profit = self.take_profit
         if self.is_long:
-            take_profit = take_profit or int('inf')
+            take_profit = take_profit or float('inf')
         if self.is_short:
             take_profit = take_profit or 0
 
