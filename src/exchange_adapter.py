@@ -60,7 +60,7 @@ class BaseExchangeAdapter:
         self.market_futures = f"{self._market}:{self._base_currency}"
 
         self.markets = None
-        self._open_position = None
+        self._open_positions = None
         self._open_orders = None
         self.balance = None
         self._trade_history = None
@@ -279,7 +279,7 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def get_opened_position(self):
+    def get_opened_positions(self):
         _logger.info(f"getting open positions")
 
         if self.exchange_id == 'binance':
@@ -293,7 +293,7 @@ class BaseExchangeAdapter:
 
         if open_positions:
             open_position = open_positions[0]
-            self._open_position = open_position
+            self._open_positions = open_position
 
         return open_positions
 
@@ -406,31 +406,103 @@ class BaseExchangeAdapter:
 
     @property
     def open_position_amount(self):
-        return self._open_position['contracts']
+        return self._open_positions['contracts']
 
     @property
     def open_position_side(self):
-        if self._open_position:
-            return POSITIONS_MAPPING.get(self._open_position['side'])
+        if self._open_positions:
+            return POSITIONS_MAPPING.get(self._open_positions['side'])
         return
 
     @property
     def open_position_equity(self):
-        return self._open_position['initialMargin'] + self._open_position['unrealizedPnl']
+        return self._open_positions['initialMargin'] + self._open_positions['unrealizedPnl']
 
     def assert_side(self, side):
         assert side != self.open_position_side, (
             f"There's already "
             f"opened position with"
             f" the same side: {self.open_position_side},"
-            f"\n{self._open_position}"
+            f"\n{self._open_positions}"
         )
 
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
     def cancel_order(self, order_id: str, symbol=None):
+        if not symbol:
+            symbol = self.market_futures
         return self._exchange.cancel_order(order_id, symbol)
+
+    def update_sl_tp(self, take_profit=None, stop_loss=None):
+        """
+        Update Take-Profit (TP) and Stop-Loss (SL) for existing positions using edit_order.
+
+        :param take_profit: Take-Profit price
+        :param stop_loss: Stop-Loss price
+        """
+        if not self._open_orders:
+            _logger.warning("No open orders. Skipping TP/SL update.")
+            return
+
+        # Separate SL and TP orders
+        opened_sl_orders = [
+            order for order in self._open_orders
+            if order['info'].get('stopOrderType') == 'StopLoss'
+        ]
+        opened_tp_orders = [
+            order for order in self._open_orders
+            if order['info'].get('stopOrderType') == 'TakeProfit'
+        ]
+
+        # Update Stop-Loss Order
+        if stop_loss:
+            if len(opened_sl_orders) > 1:
+                _logger.warning("Multiple Stop-Loss orders found. Skipping update.")
+                return
+            if opened_sl_orders:
+                sl_order = opened_sl_orders[0]
+                sl_order_id = sl_order['id']
+                side = sl_order['side']
+
+                try:
+                    params = {'stopLossPrice': stop_loss}
+                    edited_sl_order = self._exchange.edit_order(
+                        id=sl_order_id,
+                        symbol=self.market_futures,
+                        type='market',
+                        side=side,
+                        params=params
+                    )
+                    _logger.info(f"Stop-Loss updated to {stop_loss}: {edited_sl_order}")
+                except Exception as e:
+                    _logger.error(f"Failed to update Stop-Loss: {e}")
+
+        # Update Take-Profit Order
+        if take_profit:
+            if len(opened_tp_orders) > 1:
+                _logger.warning("Multiple Take-Profit orders found. Skipping update.")
+                return
+            if opened_tp_orders:
+                tp_order = opened_tp_orders[0]
+                tp_order_id = tp_order['id']
+                side = tp_order['side']
+
+                try:
+                    params = {'takeProfitPrice': take_profit}
+                    edited_tp_order = self._exchange.edit_order(
+                        id=tp_order_id,
+                        symbol=self.market_futures,
+                        type='market',
+                        side=side,
+                        params=params
+                    )
+                    _logger.info(f"Take-Profit updated to {take_profit}: {edited_tp_order}")
+                except Exception as e:
+                    _logger.error(f"Failed to update Take-Profit: {e}")
+
+        if not (stop_loss or take_profit):
+            _logger.info("No updates for TP or SL were requested.")
 
     def _set_leverage(self, leverage):
         try:
@@ -508,7 +580,7 @@ class BaseExchangeAdapter:
 
         params = {'reduceOnly': True}
         try:
-            self.get_opened_position()
+            self.get_opened_positions()
 
             if not self.open_position_side:
                 _logger.warning(f"no open position to close: {self.open_position_side}")

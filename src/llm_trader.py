@@ -106,6 +106,10 @@ class AgentAction:
         return self.action == 'cancel'
 
     @property
+    def is_update(self):
+        return self.action == 'update'
+
+    @property
     def is_hold(self):
         return self.action == 'hold'
 
@@ -241,7 +245,7 @@ class LlmTrader:
         return ohlc
 
     def get_open_positions_data(self):
-        op = self._exchange.get_opened_position()[0]
+        op = self._exchange.get_opened_positions()[0]
         contracts = op['contracts']
         if contracts > 0:
             return {
@@ -398,7 +402,7 @@ class LlmTrader:
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["long", "short", "close", "cancel", "hold"],
+                            "enum": ["long", "short", "close", "cancel", "update", "hold"],
                             "description": "The trading action to perform."
                         },
                         "order_type": {
@@ -654,6 +658,9 @@ class LlmTrader:
                 order_id=agent_action.order_id,
                 symbol=self._exchange.market_futures
             )
+        elif agent_action.is_update:
+            order = self._exchange.update_sl_tp(take_profit=agent_action.take_profit,
+                                                stop_loss=agent_action.stop_loss)
 
         self.save_agent_action(agent_action, order)
         _notifier.info(f':bangbang: {self.format_log(agent_action)}', echo='here')
