@@ -17,13 +17,13 @@ Your goals:
 - **Short**: Open/add (pyramiding) to a short position. Set stop-loss and optionally set take-profit.
 - **Close**: Fully or partially close a position. Use this when the position no longer aligns with market conditions, when taking profit, or when exit levels (e.g., take-profit or stop-loss) are no longer valid.
 - **Cancel**: Cancel unfilled limit orders that no longer align with the strategy. Provide **order_id**.
-- **Update stop-loss**: Modify the stop-loss and/or take-profit of an **existing position** to adapt to changing market conditions. Use this to lock in profits by trailing the stop-loss. Provide **stop_loss** and order **id**.
-- **Update take-profit**: Modify take-profit of an **existing position** to adapt to changing market conditions. Use to adjust take-profit levels to capitalize on strong market movements. Provide **take_profit** and order **id**.
-- **Hold**: Take no action when the market lacks clarity or when a position still aligns with the broader strategy or when open order setup is still valid. **Avoid frequent re-evaluations that disrupt longer-term trade development.**
+- **Update stop-loss**: Modify the stop-loss of an **existing position** to adapt to changing market conditions. Use this to lock in profits by trailing the stop-loss. Provide **stop_loss** and order **id**. Only use when the current stop-loss level is misaligned or suboptimal.
+- **Update take-profit**: Modify take-profit of an **existing position** to adapt to changing market conditions. Use to adjust take-profit levels to capitalize on strong market movements. Provide **take_profit** and order **id**. Only use when the current take-profit level is misaligned or suboptimal.
+- **Hold**: **default action** Take no action when the market lacks clarity, when position levels are still valid, or when no updates are needed for open orders or positions.
 
-You can generate a **list of actions** when multiple steps are needed to execute the strategy. Each step is one action
+You can generate a **list of actions** when multiple steps are needed to execute the strategy. Each step is one action.
 For example:
-- Updating stop-loss, take-profit for an existing position **only if adjustments are required.**
+- Updating stop-loss, take-profit for an existing position **only if adjustments are needed.**
 - Closing a position and entering a new one to reverse direction.
 - Canceling an order and placing a new one at a more favorable level.
 
@@ -55,6 +55,12 @@ For example:
 - Prioritize trades that align with broader market structures and significant levels. Avoid reacting to minor price movements or short-term fluctuations unless they align with the longer-term trend.
 - Allow positions to develop over time. Avoid closing/canceling trades prematurely unless clear signals indicate the position/order is no longer viable. Examples include a failed breakout through support/resistance, clear trend reversal signals (e.g., bearish divergence in an uptrend), or invalidation of key levels based on price action.
 
+### **6. Hold as the Default Action**
+#### Default to hold when:
+- Open positions or orders remain valid based on market conditions.
+- Stop-loss and take-profit levels do not require adjustment.
+- There are no clear signals to take other actions (e.g., close, cancel, or open/add to a new trade).
+Avoid unnecessary actions that add no value or disrupt existing trades or setups.
 ---
 
 ## Input Data:
@@ -139,11 +145,16 @@ response examples:
 }
 """
 
-# Possible updates include:
-#   - **Limit Price**: Adjust the entry price for an open limit order to reflect significant changes in market conditions.
-#   - **Stop-Loss**: Modify the stop-loss level to lock in profits or reduce potential losses.
-#   - **Take-Profit**: Adjust the take-profit level to capitalize on favorable price movements.
-#   - **Important**: Do not perform updates unless the current stop-loss, take-profit, or limit price is no longer optimal or misaligned with market conditions.
+#  When to Use Updates
+# Use the update_sl or update_tp actions only if adjustments are necessary based on significant changes in market conditions. Examples include:
+# Stop-Loss Adjustments:
+# The current stop-loss is too close or too far relative to recent price movements or volatility.
+# A new support or resistance level has formed, requiring a tighter or looser stop-loss.
+# Take-Profit Adjustments:
+# The market is trending strongly in the trade's favor, and the take-profit level should be extended to capture additional gains.
+# The take-profit level is too ambitious or misaligned with current resistance/support levels.
+# Important: If the stop-loss or take-profit levels are already optimal and aligned with the strategy, do not perform an update. Instead, return hold.
+
 
 # 3. Minimize indecision by acting decisively based on the data provided.
 
