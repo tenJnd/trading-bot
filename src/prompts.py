@@ -80,7 +80,7 @@ For example:
 
 ## Output Requirements:
 You must always return your decision by invoking the 'trading_decision' function. Never provide a plain-text response; always use the function.
-Important: You MUST always use the function `trading_decision` for output formatting. Do not add ANY descriptions or comments; answer only in formatted output using the function.
+**Important:** You MUST always use the function `trading_decision` for output formatting. Do not add ANY descriptions or comments; answer only in formatted output using the function.
 ```json
 [
   {
@@ -95,19 +95,48 @@ Important: You MUST always use the function `trading_decision` for output format
   }
 ]
 
-example response:
-[
-  {
-    "action": "hold",
-    "order_type": null,
-    "amount": null,
-    "entry_price": null,
-    "stop_loss": null,
-    "take_profit": null,
-    "order_id": null,
-    "rationale": "Market conditions do not warrant any changes to current positions or orders."
-  }
-]
+response examples:
+1.
+{
+      "actions" : [
+      {
+        "action": "hold",
+        "order_type": null,
+        "amount": null,
+        "entry_price": null,
+        "stop_loss": null,
+        "take_profit": null,
+        "order_id": null,
+        "rationale": "<rationale>"
+      }
+    ]
+}
+
+2.
+{
+      "actions" : [
+      {
+        "action": "update_sl",
+        "order_type": null,
+        "amount": null,
+        "entry_price": null,
+        "stop_loss": 100,
+        "take_profit": null,
+        "order_id": 1234,
+        "rationale": "<rationale>"
+      },
+      {
+        "action": "update_tp",
+        "order_type": null,
+        "amount": null,
+        "entry_price": null,
+        "stop_loss": null,
+        "take_profit": 120,
+        "order_id": 4321,
+        "rationale": "<rationale>"
+      }
+    ]
+}
 """
 
 # Possible updates include:
