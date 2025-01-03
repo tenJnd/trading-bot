@@ -135,6 +135,7 @@ class LlmTrader:
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
     df_tail_for_agent = 20
+    leverage = 2
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -618,8 +619,8 @@ class LlmTrader:
 
         # Calculate the potential risk per trade
         move_against = abs(agent_action.stop_loss - c_price)
-        trade_risk_cap = (self._exchange.free_balance * 0.9) * 0.01  # 1% risk per trade
-        raw_amount = trade_risk_cap / move_against
+        trade_risk_cap = (self._exchange.free_balance * 0.9) * 0.01  # 1% risk per trade * leverage!!
+        raw_amount = (trade_risk_cap / move_against) * self.leverage
 
         # Check if the raw amount is below the exchange's minimum tradable amount
         if raw_amount < self._exchange.min_amount:
@@ -672,7 +673,8 @@ class LlmTrader:
                                          amount=agent_action.amount,
                                          limit_price=agent_action.entry_price,
                                          stop_loss=agent_action.stop_loss,
-                                         take_profit=agent_action.take_profit)
+                                         take_profit=agent_action.take_profit,
+                                         leverage=self.leverage)
         elif agent_action.is_close:
             order = self._exchange.order(agent_action.action, agent_action.amount)
         elif agent_action.is_cancel:

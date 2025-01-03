@@ -544,11 +544,15 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def enter_position(self, side, amount, limit_price=None, stop_loss=None, take_profit=None):
+    def enter_position(self, side, amount, limit_price=None, stop_loss=None, take_profit=None, leverage=None):
         _logger.info(f"entering {str.upper(side)} position")
-        leverage = self.global_params.get('leverage', 1)
+        if not leverage:
+            leverage = self.global_params.get('leverage', 1)
+            params = self.global_params
+        else:
+            self.global_params['leverage'] = leverage
+            params = self.global_params
 
-        params = self.global_params
         # Set stop-loss and take-profit if provided
         if stop_loss:
             params['stopLoss'] = {'triggerPrice': stop_loss}
@@ -650,7 +654,8 @@ class BaseExchangeAdapter:
               amount: float = 0,
               limit_price: float = None,
               stop_loss: float = None,
-              take_profit: float = None):
+              take_profit: float = None,
+              leverage: int = None):
 
         _actions = {
             'long': {'action': self.enter_position, 'side': 'buy'},
@@ -663,7 +668,7 @@ class BaseExchangeAdapter:
         side = position.get('side', None)
 
         if side:
-            return position_order(side, amount, limit_price, stop_loss, take_profit)
+            return position_order(side, amount, limit_price, stop_loss, take_profit, leverage)
         return position_order(amount)
 
 
