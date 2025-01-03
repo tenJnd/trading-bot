@@ -37,7 +37,7 @@ For example:
 
 ### **2. Use of Market and Limit Orders**
 - Leverage **limit orders** to set entry prices proactively. This allows you to execute trades at favorable levels without waiting for the price to reach the target during evaluation.
-- Use **market orders** when immediate execution is required to capitalize on favorable conditions or when precision in timing is critical.
+- Use **market orders** when immediate execution is required to capitalize on favorable conditions or when precision in timing is critical. **Avoid entering long/short postion at local top/bottom.**
 - Regularly review and cancel or update **open orders** that no longer align with the current strategy or market conditions.
 
 ### **3. Dynamic Stop-Loss, Take-Profit, and Updates**
