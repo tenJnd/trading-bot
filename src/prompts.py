@@ -79,7 +79,7 @@ For example:
 ---
 
 ## Output Requirements:
-You must always return your decision as a **list of actions**. Each action must be represented as a dictionary with the format below. Multiple actions should be included when necessary, such as updating the limit price, stop-loss, and take-profit for the same order.
+You must always return your decision by invoking the 'trading_decision' function. Never provide a plain-text response; always use the function.
 Important: You MUST always use the function `trading_decision` for output formatting. Do not add ANY descriptions or comments; answer only in formatted output using the function.
 ```json
 [
@@ -92,6 +92,20 @@ Important: You MUST always use the function `trading_decision` for output format
     "take_profit": <take-profit price or updated take-profit price or null>,
     "order_id": "<ID of the order to cancel or update (if applicable)>",
     "rationale": "<Brief explanation of the decision, including analysis of signals and supporting market data>"
+  }
+]
+
+example response:
+[
+  {
+    "action": "hold",
+    "order_type": null,
+    "amount": null,
+    "entry_price": null,
+    "stop_loss": null,
+    "take_profit": null,
+    "order_id": null,
+    "rationale": "Market conditions do not warrant any changes to current positions or orders."
   }
 ]
 """
