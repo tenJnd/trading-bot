@@ -528,6 +528,11 @@ class LlmTrader:
                                              f'max amount ({max_amount}, based on free capital)\n'
                                              f'exiting llm trader w/ a call')
 
+        min_threshold = 150
+        if self._exchange.free_balance < min_threshold:
+            raise ConditionVerificationError(f'free balance is lower then '
+                                             f'min threshold: {min_threshold}')
+
         _logger.info("No constrains, can call the agent...")
 
     def check_trade_valid(self, agent_action) -> AgentAction:
