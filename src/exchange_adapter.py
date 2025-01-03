@@ -48,6 +48,7 @@ class BaseExchangeAdapter:
             # Explicitly update only the API credentials
             base_config['apiKey'] = sub_account_config['apiKey']
             base_config['secret'] = sub_account_config['secret']
+            base_config['options']['leverage'] = sub_account_config['leverage']
 
         # Remove sub-accounts key to avoid passing it to the exchange object
         base_config.pop('sub_accounts', None)

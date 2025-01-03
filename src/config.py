@@ -84,7 +84,8 @@ BYBIT_CONFIG_PROD = {
     'sub_accounts': {
         'subAccount1': {
             'apiKey': BYBIT_API_KEY_SUB1,
-            'secret': BYBIT_API_SECRET_SUB1
+            'secret': BYBIT_API_SECRET_SUB1,
+            'leverage': 2
         }
     }
 }
