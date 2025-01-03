@@ -504,6 +504,36 @@ class BaseExchangeAdapter:
         if not (stop_loss or take_profit):
             _logger.info("No updates for TP or SL were requested.")
 
+    def edit_order(self, ordr_id, price=None, stop_loss=None, take_profit=None):
+        order = [
+            order for order in self._open_orders
+            if order['id'] == ordr_id
+        ]
+        if not order:
+            return
+        else:
+            order = order[0]
+
+        side = order['side']
+        params = {}
+        try:
+            if take_profit:
+                params['takeProfitPrice'] = take_profit
+            if stop_loss:
+                params['stopLossPrice'] = stop_loss
+
+            edited_tp_order = self._exchange.edit_order(
+                id=ordr_id,
+                symbol=self.market_futures,
+                type='market',
+                side=side,
+                price=price,
+                params=params
+            )
+            _logger.info(f"Take-Profit updated to {take_profit}: {edited_tp_order}")
+        except Exception as e:
+            _logger.error(f"Failed to update Take-Profit: {e}")
+
     def _set_leverage(self, leverage):
         try:
             _logger.info(f"Setting leverage to {leverage} for {self.market_futures}")

@@ -106,8 +106,12 @@ class AgentAction:
         return self.action == 'cancel'
 
     @property
-    def is_update(self):
-        return self.action == 'update'
+    def is_update_sl(self):
+        return self.action == 'update_sl'
+
+    @property
+    def is_update_tp(self):
+        return self.action == 'update_tp'
 
     @property
     def is_hold(self):
@@ -280,6 +284,7 @@ class LlmTrader:
             open_orders_list = []
             for order in open_orders:
                 open_orders_list.append({
+                    'order_type': order['info'].get('stopOrderType', None),
                     'amount': order.get('amount', None),
                     'average': order.get('average', None),
                     'datetime': order.get('datetime', None),
@@ -400,50 +405,60 @@ class LlmTrader:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["long", "short", "close", "cancel", "update", "hold"],
-                            "description": "The trading action to perform."
-                        },
-                        "order_type": {
-                            "type": "string",
-                            "enum": ["limit", "market"],
-                            "description": "The type of order to place. Required for 'long' or 'short'."
-                        },
-                        "amount": {
-                            "type": ["number", "null"],
-                            "description": "The amount for the position or order."
-                        },
-                        "entry_price": {
-                            "type": ["number", "null"],
-                            "description": "The price at which to enter the trade "
-                                           "(only required if order_type is 'limit')."
-                        },
-                        "stop_loss": {
-                            "type": ["number", "null"],
-                            "description": "The stop-loss price level."
-                        },
-                        "take_profit": {
-                            "type": ["number", "null"],
-                            "description": "The take-profit price level."
-                        },
-                        "order_id": {
-                            "type": ["string", "null"],
-                            "description": "The ID of the order to cancel (only required for 'cancel' action)."
-                        },
-                        "rationale": {
-                            "type": "string",
-                            "description": "Explanation of the decision based on price action, trend, "
-                                           "indicators, open interest, funding rate, and exchange settings."
+                        "actions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "enum": ["long", "short", "close", "cancel", "update_sl", "update_tp", "hold"],
+                                        "description": "The trading action to perform."
+                                    },
+                                    "order_type": {
+                                        "type": ["string", "null"],
+                                        "enum": ["limit", "market"],
+                                        "description": "The type of order to place. Required for 'long' or 'short'."
+                                    },
+                                    "amount": {
+                                        "type": ["number", "null"],
+                                        "description": "The amount for the position or order."
+                                    },
+                                    "entry_price": {
+                                        "type": ["number", "null"],
+                                        "description": "The price at which to enter the trade "
+                                                       "(only required if order_type is 'limit')."
+                                    },
+                                    "stop_loss": {
+                                        "type": ["number", "null"],
+                                        "description": "The stop-loss price level or updated stop-loss level for 'update_sl'."
+                                    },
+                                    "take_profit": {
+                                        "type": ["number", "null"],
+                                        "description": "The take-profit price level or updated take-profit level for 'update_tp'."
+                                    },
+                                    "order_id": {
+                                        "type": ["string", "null"],
+                                        "description": "The ID of the order to cancel or update. Required for 'cancel' and 'update_sl', update_tp."
+                                    },
+                                    "rationale": {
+                                        "type": "string",
+                                        "description": "Explanation of the decision based on price action, trend, "
+                                                       "indicators, open interest, funding rate, and exchange settings."
+                                    }
+                                },
+                                "required": ["action", "rationale"],
+                                "description": "Defines a single trading action."
+                            }
                         }
                     },
-                    "required": ["action", "rationale"],
-                    "description": "Defines the parameters for a trading decision."
+                    "required": ["actions"],
+                    "description": "Defines a list of trading actions to be performed in sequence."
                 }
             }
         ]
 
-    def call_agent(self):
+    def call_agent(self, list_of_actions=False):
         _logger.info(f"creating agent using llm factory, config: {self.llm_model_config.MODEL}")
         llm_client = LLMClientFactory.create_llm_client(self.llm_model_config)
         functions = self.generate_functions()
@@ -459,27 +474,33 @@ class LlmTrader:
         structured_data = json.loads(parsed_output)
         _logger.info(f"agent call success")
 
-        return self.agent_action_obj(**structured_data)
+        if list_of_actions:
+            actions = structured_data['actions']
+            actions = [self.agent_action_obj(**data) for data in actions]
+            return actions
+        else:
+            return self.agent_action_obj(**structured_data)
 
     def call_agent_w_validation(self):
         counter = 1
         tries = 3
-        agent_action = None
+        agent_actions = None
 
         while counter <= tries:
             try:
-                agent_action = self.call_agent()
-                self.check_trade_valid(agent_action)
+                agent_actions = self.call_agent(list_of_actions=True)
+                for agent_action in agent_actions:
+                    self.check_trade_valid(agent_action)
                 break
             except ValidationError as exc:
                 msg = (f"agent output not validated: {exc} "
-                       f"agent_action: {agent_action.nice_print()}\n"
+                       f"agent_actions: {[agent_action.nice_print() for agent_action in agent_actions]}\n"
                        f"try num: {counter}")
                 _logger.warning(msg)
                 _notifier.warning(msg)
 
                 previous_output_dict = {
-                    'previous_agent_action': agent_action,
+                    'previous_agent_action': agent_actions,
                     'error': str(exc)
                 }
                 self.llm_input_data['previous_output'] = previous_output_dict
@@ -488,9 +509,9 @@ class LlmTrader:
         # If the loop exits without breaking (all attempts failed), raise an error
         if counter > tries:
             raise RuntimeError(f"Validation failed after {tries} attempts. Last agent action: "
-                               f"{getattr(agent_action, 'nice_print', lambda: '<unknown>')()}")
+                               f"{getattr(agent_actions, 'nice_print', lambda: '<unknown>')()}")
 
-        return agent_action
+        return agent_actions
 
     def pre_check_constrains(self):
         """ add all the 'before call conditions/constrains here """
@@ -590,6 +611,7 @@ class LlmTrader:
             AgentAction: Updated with the calculated amount, or None if the trade is invalid.
         """
         # Determine the price for calculation (use limit price if available, otherwise last close price)
+        self._exchange.fetch_balance()
         agent_limit_price = agent_action.entry_price
         close_price = self._exchange.get_close_price()
         c_price = agent_limit_price if agent_limit_price else close_price
@@ -658,23 +680,29 @@ class LlmTrader:
                 order_id=agent_action.order_id,
                 symbol=self._exchange.market_futures
             )
-        elif agent_action.is_update:
-            order = self._exchange.update_sl_tp(take_profit=agent_action.take_profit,
-                                                stop_loss=agent_action.stop_loss)
+        elif agent_action.is_update_sl:
+            order = self._exchange.edit_order(
+                ordr_id=agent_action.order_id,
+                stop_loss=agent_action.stop_loss)
+        elif agent_action.is_update_tp:
+            order = self._exchange.edit_order(
+                ordr_id=agent_action.order_id,
+                take_profit=agent_action.take_profit)
 
         self.save_agent_action(agent_action, order)
         _notifier.info(f':bangbang: {self.format_log(agent_action)}', echo='here')
 
     def trade(self):
         self.pre_check_constrains()
-        agent_action = self.call_agent_w_validation()
+        agent_actions = self.call_agent_w_validation()
 
-        if agent_action.is_hold:
-            _notifier.info(self.format_log(agent_action))
-        else:
-            self.process_non_hold_action(agent_action)
+        for agent_action in agent_actions:
+            if agent_action.is_hold:
+                _notifier.info(self.format_log(agent_action))
+            else:
+                self.process_non_hold_action(agent_action)
 
-        _logger.info(self.format_log(agent_action))
+            _logger.info(self.format_log(agent_action))
 
     def save_agent_action(self, agent_action: AgentAction, order=None):
         _logger.info("Saving agent action...")
