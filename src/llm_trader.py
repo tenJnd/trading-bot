@@ -509,8 +509,8 @@ class LlmTrader:
 
         # If the loop exits without breaking (all attempts failed), raise an error
         if counter > tries:
-            raise RuntimeError(f"Validation failed after {tries} attempts. Last agent action: "
-                               f"{getattr(agent_actions, 'nice_print', lambda: '<unknown>')()}")
+            raise ValidationError(f"Validation failed after {tries} attempts. Last agent action: "
+                                  f"{getattr(agent_actions, 'nice_print', lambda: '<unknown>')()}")
 
         return agent_actions
 
@@ -709,10 +709,7 @@ class LlmTrader:
             _logger.error(msg)
             _logger.warning(msg)
             return
-        except ValidationError as e:
-            msg = f"Validation error; SKIPPING: {str(e)}"
-            _logger.error(msg)
-            _logger.warning(msg)
+        except ValidationError:
             return
 
         for agent_action in agent_actions:
