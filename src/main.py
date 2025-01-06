@@ -9,7 +9,7 @@ from slack_bot.notifications import SlackNotifier
 from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
-from src.llm_trader import LlmTrader, ConditionVerificationError
+from src.llm_trader import LlmTrader
 from src.ticker_picker import LlmTickerPicker, TickerPicker
 from src.utils.turtle_back_test import turtle_back_test
 from src.utils.utils import load_strategy_settings, save_total_balance
@@ -132,10 +132,7 @@ def llm_trade(exchange_id, tickers):
             exchange_adapter.market = f"{strategy.ticker}"
             trader = LlmTrader(exchange_adapter, strategy)
             exchange_adapter.fetch_balance()
-            try:
-                trader.trade()
-            except ConditionVerificationError as e:
-                _logger.info(f"Conditional error; SKIPPING: {str(e)}")
+            trader.trade()
 
         save_total_balance(
             exchange_id=exchange_id,

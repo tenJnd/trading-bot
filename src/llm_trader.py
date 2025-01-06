@@ -484,7 +484,7 @@ class LlmTrader:
 
     def call_agent_w_validation(self):
         counter = 1
-        tries = 3
+        tries = 1
         agent_actions = None
 
         while counter <= tries:
@@ -558,9 +558,9 @@ class LlmTrader:
         error_messages = []
 
         rr_ratio = agent_action.rr_ratio(c_price)
-        if rr_ratio < 1:
+        if rr_ratio < 1.9:
             error_messages.append(
-                f"Invalid R:R ratio. R:R is less than 1 for {agent_action.action} action. "
+                f"Invalid R:R ratio. R:R is less than 1.9 for {agent_action.action} action. "
                 f"Current R:R = {rr_ratio:.2f}."
                 f" Adjust take-profit (place tp near support/resistance further from price/limit-price)"
                 f" or stop-loss (place sl near resistance/support closer to price/limit-price) to ensure R:R >= 1.\n"
@@ -700,8 +700,16 @@ class LlmTrader:
         _notifier.info(f':bangbang: {self.format_log(agent_action)}', echo='here')
 
     def trade(self):
-        self.pre_check_constrains()
-        agent_actions = self.call_agent_w_validation()
+        try:
+            self.pre_check_constrains()
+            agent_actions = self.call_agent_w_validation()
+
+        except ConditionVerificationError as e:
+            _logger.error(f"Conditional error; SKIPPING: {str(e)}")
+            return
+        except ValidationError as e:
+            _logger.error(f"Validation error; SKIPPING: {str(e)}")
+            return
 
         for agent_action in agent_actions:
             if agent_action.is_hold:
