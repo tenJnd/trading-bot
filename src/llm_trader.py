@@ -557,20 +557,23 @@ class LlmTrader:
         # Initialize error messages list
         error_messages = []
 
+        min_rr_ratio = 1.5
         rr_ratio = agent_action.rr_ratio(c_price)
-        if rr_ratio < 1.9:
+        if rr_ratio < min_rr_ratio:
             error_messages.append(
-                f"Invalid R:R ratio. R:R is less than 1.9 for {agent_action.action} action. "
+                f"Invalid R:R ratio. R:R is less than {min_rr_ratio} for {agent_action.action} action. "
                 f"Current R:R = {rr_ratio:.2f}."
                 f" Adjust take-profit (place tp near support/resistance further from price/limit-price)"
-                f" or stop-loss (place sl near resistance/support closer to price/limit-price) to ensure R:R >= 1.\n"
+                f" or stop-loss (place sl near resistance/support closer to price/limit-price) "
+                f"to ensure R:R >= {min_rr_ratio}.\n"
             )
 
         # Price validation for long positions
         if agent_action.is_long:
             if not (agent_action.stop_loss < c_price < (agent_action.take_profit or float('inf'))):
                 error_messages.append(
-                    f"Invalid price logic for long position: stop-loss ({agent_action.stop_loss}) must be below entry price ({c_price}), "
+                    f"Invalid price logic for long position: stop-loss ({agent_action.stop_loss}) "
+                    f"must be below entry price ({c_price}), "
                     f"and take-profit ({agent_action.take_profit or 'None'}) must be above entry price. "
                     f"Adjust stop-loss or take-profit levels to correct this logic.\n"
                 )
@@ -586,7 +589,8 @@ class LlmTrader:
         if agent_action.is_short:
             if not (agent_action.stop_loss > c_price > (agent_action.take_profit or 0)):
                 error_messages.append(
-                    f"Invalid price logic for short position: stop-loss ({agent_action.stop_loss}) must be above entry price ({c_price}), "
+                    f"Invalid price logic for short position: stop-loss ({agent_action.stop_loss}) "
+                    f"must be above entry price ({c_price}), "
                     f"and take-profit ({agent_action.take_profit or 'None'}) must be below entry price. "
                     f"Adjust stop-loss or take-profit levels to correct this logic.\n"
                 )
