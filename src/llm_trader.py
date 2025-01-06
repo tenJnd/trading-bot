@@ -484,7 +484,7 @@ class LlmTrader:
 
     def call_agent_w_validation(self):
         counter = 1
-        tries = 1
+        tries = 2
         agent_actions = None
 
         while counter <= tries:
