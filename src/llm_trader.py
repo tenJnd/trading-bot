@@ -705,10 +705,14 @@ class LlmTrader:
             agent_actions = self.call_agent_w_validation()
 
         except ConditionVerificationError as e:
-            _logger.error(f"Conditional error; SKIPPING: {str(e)}")
+            msg = f"Conditional error; SKIPPING: {str(e)}"
+            _logger.error(msg)
+            _logger.warning(msg)
             return
         except ValidationError as e:
-            _logger.error(f"Validation error; SKIPPING: {str(e)}")
+            msg = f"Validation error; SKIPPING: {str(e)}"
+            _logger.error(msg)
+            _logger.warning(msg)
             return
 
         for agent_action in agent_actions:
