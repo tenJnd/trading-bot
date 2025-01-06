@@ -563,7 +563,8 @@ class LlmTrader:
             error_messages.append(
                 f"Invalid R:R ratio. R:R is less than {min_rr_ratio} for {agent_action.action} action. "
                 f"Current R:R = {rr_ratio:.2f}. "
-                f"Adjust the {agent_action.action} position to ensure R:R >= {min_rr_ratio}.\n or hold."
+                f"Adjust previous {agent_action.action} action error "
+                f"to ensure R:R >= {min_rr_ratio}.\n or hold."
             )
 
         # Price validation for long positions
@@ -573,7 +574,8 @@ class LlmTrader:
                     f"Invalid price logic for long position: stop-loss ({agent_action.stop_loss}) "
                     f"must be below entry price ({c_price}), "
                     f"and take-profit ({agent_action.take_profit or 'None'}) must be above entry price. "
-                    f"Adjust stop-loss or take-profit levels to correct this logic.\n"
+                    f"Adjust previous {agent_action.action} action error "
+                    f"to correct this logic.\n"
                 )
             if agent_action.entry_price:
                 if agent_action.entry_price > last_close:
@@ -590,7 +592,8 @@ class LlmTrader:
                     f"Invalid price logic for short position: stop-loss ({agent_action.stop_loss}) "
                     f"must be above entry price ({c_price}), "
                     f"and take-profit ({agent_action.take_profit or 'None'}) must be below entry price. "
-                    f"Adjust stop-loss or take-profit levels to correct this logic.\n"
+                    f"Adjust previous {agent_action.action} action error "
+                    f"to correct this logic.\n"
                 )
             if agent_action.entry_price:
                 if agent_action.entry_price < last_close:
