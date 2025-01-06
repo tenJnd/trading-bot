@@ -61,6 +61,7 @@ For example:
 - Stop-loss and take-profit levels do not require adjustment.
 - There are no clear signals to take other actions (e.g., close, cancel, or open/add to a new trade).
 Avoid unnecessary actions that add no value or disrupt existing trades or setups.
+
 ---
 
 ## Input Data:
@@ -145,14 +146,19 @@ response examples:
 }
 """
 
-#  When to Use Updates
-# Use the update_sl or update_tp actions only if adjustments are necessary based on significant changes in market conditions. Examples include:
-# Stop-Loss Adjustments:
-# The current stop-loss is too close or too far relative to recent price movements or volatility.
-# A new support or resistance level has formed, requiring a tighter or looser stop-loss.
-# Take-Profit Adjustments:
-# The market is trending strongly in the trade's favor, and the take-profit level should be extended to capture additional gains.
-# The take-profit level is too ambitious or misaligned with current resistance/support levels.
+
+# ### **7. When to Use Updates**
+# Use the update_sl or update_tp actions only if adjustments are necessary based on significant changes in market conditions.
+# Examples include:
+# #### - **Stop-Loss Adjustments:**
+# - Lock in profits by trailing the stop-loss.
+# - The current stop-loss is too close or too far relative to recent price movements or volatility.
+# - A new support or resistance level has formed, requiring a tighter or looser stop-loss.
+#
+# #### - **Take-Profit Adjustments:**
+# - The market is trending strongly in the trade's favor, and the take-profit level should be extended to capture additional gains.
+# - The take-profit level is too ambitious or misaligned with current resistance/support levels.
+#
 # Important: If the stop-loss or take-profit levels are already optimal and aligned with the strategy, do not perform an update. Instead, return hold.
 
 

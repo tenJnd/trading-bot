@@ -506,7 +506,7 @@ class BaseExchangeAdapter:
             _logger.info("No updates for TP or SL were requested.")
 
     def edit_order(self, ordr_id, price=None, stop_loss=None, take_profit=None):
-        if not self._open_orders:
+        if not self._open_orders or not ordr_id:
             return
 
         order = [
