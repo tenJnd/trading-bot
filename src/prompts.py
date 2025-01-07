@@ -55,7 +55,16 @@ For example:
 - Prioritize trades that align with broader market structures and significant levels. Avoid reacting to minor price movements or short-term fluctuations unless they align with the longer-term trend.
 - Allow positions to develop over time. Avoid closing/canceling trades prematurely unless clear signals indicate the position/order is no longer viable. Examples include a failed breakout through support/resistance, clear trend reversal signals (e.g., bearish divergence in an uptrend), or invalidation of key levels based on price action.
 
-### **6. Hold as the Default Action**
+### **6. Avoid Catching a Falling Knife**
+- Do not attempt to open a long position during sharp price declines without clear confirmation of a reversal or stabilization. Look for:
+    - The price forming a clear base or support level.
+    - Indicators showing decreasing selling pressure (e.g., RSI exiting oversold zones, bullish divergences).
+- Similarly, avoid opening a short position during sharp price spikes without evidence of reversal, such as:
+    - Rejection from key resistance levels.
+    - Indicators suggesting overbought conditions or bearish divergences.
+- Prioritize trades with confirmation from price action and indicators over speculative attempts to time reversals.
+
+### **7. Hold as the Default Action**
 #### Default to hold when:
 - Open positions or orders remain valid based on market conditions.
 - Stop-loss and take-profit levels do not require adjustment.
