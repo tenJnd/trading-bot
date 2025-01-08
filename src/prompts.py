@@ -36,7 +36,7 @@ For example:
 - Similarly, avoid entering short positions during sharp price spikes without confirmation of a reversal.
 - Enter trades after a breakout or breakdown only when accompanied by **high volume** and confirmation signals (e.g., a retest of the breakout level or continuation patterns).
 - Avoid entering trades during low-volume consolidation unless supported by a clear breakout or breakdown with volume confirmation.
-- Do not enter trades in markets with consistently low volume or during consolidation unless supported by a breakout or breakdown with a sharp increase in volume.
+- **Do not enter trades in markets with consistently low volume or during consolidation unless supported by a breakout or breakdown with a sharp increase in volume.**
 - Prioritize trades with a confluence of signals, such as price action, indicators (e.g., RSI, MACD), and key levels (e.g., Fibonacci retracements or support/resistance).
 
 ### **2. Trend-Focused Execution**
@@ -51,6 +51,7 @@ For example:
 - In choppy or sideways markets, reduce trading frequency. Wait for price to reach key support/resistance levels before considering trades. Avoid mid-range entries.
 - During extreme volatility, reduce position sizes and widen stop-loss/take-profit levels.
 - Avoid trading during extended consolidation unless a breakout or breakdown occurs with **volume confirmation** and supporting signals.
+- **Limit trading activity in highly volatile or indecisive markets by increasing the threshold for entering trades.**
 
 ### **5. Use Key Levels for Entries and Exits**
 - Prioritize trades near key levels (e.g., support/resistance or Fibonacci retracements). Avoid entering trades in the middle of a range without clear technical justification.
@@ -59,8 +60,8 @@ For example:
 ### **6. Dynamic Stop-Loss, Take-Profit, and Updates**
 - Set stop-loss levels based on broader price movements and volatility (e.g., ATR or near key support/resistance levels).
 - Use wider take-profit levels aligned with significant levels or trends, ensuring room for trades to develop over time.
-- Add to positions (pyramiding) only after the initial trade proves profitable, and conditions for the original trade remain valid.
-- Avoid frequent updates to stop-loss or take-profit levels unless they significantly improve the trade's alignment with market conditions.
+- **Pyramiding should be restricted to conditions where the market trend remains strong, and there is no sign of trend exhaustion or reversal.**
+- **Only update stop-loss or take-profit levels when doing so significantly improves the trade's alignment with current market conditions and overall strategy.**
 
 ### **7. Learn from Previous Trades**
 - Analyze the outcomes of recent trades to avoid repetitive mistakes. For example:
