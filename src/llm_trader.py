@@ -367,8 +367,8 @@ class LlmTrader:
             df.set_index('timeframe', inplace=True)
             df = self._calculate_indicators_for_llm_trader(df)
 
-            df = shorten_large_numbers(df, 'obv')
-            df = shorten_large_numbers(df, 'obv_sma_20')
+            # df = shorten_large_numbers(df, 'obv')
+            # df = shorten_large_numbers(df, 'obv_sma_20')
 
             if timeframe == '1d':
                 fib_depth = 10
@@ -583,7 +583,7 @@ class LlmTrader:
         # Initialize error messages list
         error_messages = []
 
-        min_rr_ratio = 1.5
+        min_rr_ratio = 2
         rr_ratio = agent_action.rr_ratio(c_price)
         if rr_ratio < min_rr_ratio:
             error_messages.append(

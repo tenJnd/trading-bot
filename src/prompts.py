@@ -36,6 +36,7 @@ For example:
 - Similarly, avoid entering short positions during sharp price spikes without confirmation of a reversal.
 - Enter trades after a breakout or breakdown only when accompanied by **high volume** and confirmation signals (e.g., a retest of the breakout level or continuation patterns).
 - Avoid entering trades during low-volume consolidation unless supported by a clear breakout or breakdown with volume confirmation.
+- Do not enter trades in markets with consistently low volume or during consolidation unless supported by a breakout or breakdown with a sharp increase in volume.
 - Prioritize trades with a confluence of signals, such as price action, indicators (e.g., RSI, MACD), and key levels (e.g., Fibonacci retracements or support/resistance).
 
 ### **2. Trend-Focused Execution**
@@ -59,6 +60,7 @@ For example:
 - Set stop-loss levels based on broader price movements and volatility (e.g., ATR or near key support/resistance levels).
 - Use wider take-profit levels aligned with significant levels or trends, ensuring room for trades to develop over time.
 - Add to positions (pyramiding) only after the initial trade proves profitable, and conditions for the original trade remain valid.
+- Avoid frequent updates to stop-loss or take-profit levels unless they significantly improve the trade's alignment with market conditions.
 
 ### **7. Learn from Previous Trades**
 - Analyze the outcomes of recent trades to avoid repetitive mistakes. For example:
@@ -81,7 +83,7 @@ For example:
    - **Price Data**: A dictionary containing data for multiple timeframes:
      - **4h**: Includes:
        - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
-       - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., ATR, SMA, RSI, MACD, BB, OI, OBV, etc.).
+       - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., Volume MA, ATR, SMA, RSI, MACD, BB, OI etc.).
        - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
      - **1d**: Includes:
        - Same data structure as the 4h timeframe but used only for broader context (e.g., trend confirmation, key levels).
