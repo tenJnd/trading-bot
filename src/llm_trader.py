@@ -19,10 +19,10 @@ from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
 from src.utils.utils import (calculate_sma, round_series,
-                             shorten_large_numbers,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
-                             calculate_closest_fvg_zones, calculate_fib_levels_pivots)
+                             calculate_fib_levels_pivots,
+                             calculate_regression_channels_as_dict)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -33,6 +33,7 @@ PERIODS = {
     '1d': 220,
     '3d': 660,
 }
+
 
 def aggregate_partial_closes(trades_df):
     """
@@ -47,15 +48,16 @@ def aggregate_partial_closes(trades_df):
         as_index=False
     ).agg({
         'amount': 'sum',  # Sum the amounts
-        'pnl': 'sum',     # Sum the PnL
-        'fee': 'sum',     # Sum the fees
+        'pnl': 'sum',  # Sum the PnL
+        'fee': 'sum',  # Sum the fees
         'fee_rate': 'first',  # Keep the first fee rate (assuming it remains consistent)
-        'datetime': 'first'   # Keep the earliest datetime
+        'datetime': 'first'  # Keep the earliest datetime
     })
 
     grouped = grouped.sort_values(by="datetime")
 
     return grouped
+
 
 def get_next_key(base_key):
     # Convert the keys to a list
@@ -380,7 +382,7 @@ class LlmTrader:
             fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             # fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
-            # lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
+            lin_reg = calculate_regression_channels_as_dict(df, length=100)
 
             merged_df = df.copy()
             if oi is not None:
@@ -397,7 +399,7 @@ class LlmTrader:
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
                 # 'closest_fair_value_gaps_levels': fvg_dict,
-                # 'linear_regression_channels': lin_reg
+                'linear_regression_channels': lin_reg
             }
         return result_data
 

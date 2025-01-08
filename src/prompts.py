@@ -55,7 +55,8 @@ For example:
 - **Limit trading activity in highly volatile or indecisive markets by increasing the threshold for entering trades.**
 
 ### **5. Use Key Levels for Entries and Exits**
-- Prioritize trades near key levels (e.g., support/resistance or Fibonacci retracements). Avoid entering trades in the middle of a range without clear technical justification.
+- Prioritize trades near key levels (e.g., support/resistance, Fibonacci retracements, Regression channel). Avoid entering trades in the middle of a range without clear technical justification.
+- Utilize lower_channel from the regression channel as dynamic support for long entries and upper_channel as dynamic resistance for short entries, ensuring alignment with overall trend direction.
 - Use volume as a secondary confirmation for entries and exits. Prioritize trades with increasing volume during breakouts or reversals.
 
 ### **6. Dynamic Stop-Loss, Take-Profit, and Updates**
@@ -87,6 +88,7 @@ For example:
        - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
        - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., Volume MA, ATR, SMA, RSI, MACD, BB, OI etc.).
        - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
+       - **Linear Regression channel**: A dictionary of regression channel values. 
      - **1d**: Includes:
        - Same data structure as the 4h timeframe but used only for broader context (e.g., trend confirmation, key levels).
    - **Current Funding Rate**: The latest funding rate for the asset (`current_funding_rate`).

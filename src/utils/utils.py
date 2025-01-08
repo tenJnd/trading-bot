@@ -382,56 +382,60 @@ def calculate_closest_fvg_zones(df, current_price, threshold_percentage=2.0):
     return result
 
 
-def calculate_regression_channels_with_slope(df, periods=[20], upper_dev=2, lower_dev=2):
+def calculate_regression_channels_as_dict(df, length=100, source_column='C', upper_dev=2.0, lower_dev=2.0,
+                                          show_pearson=True):
     """
-    Calculate linear regression channels for multiple periods, including slope.
+    Calculate linear regression channels and return the last values as a dictionary.
 
     Parameters:
-    - df: DataFrame with 'timestamp' and 'C' columns.
-    - periods: List of lookback periods to calculate regression channels.
-    - upper_dev: Upper deviation factor.
-    - lower_dev: Lower deviation factor.
+    - df: DataFrame containing at least the 'close' column.
+    - length: Number of periods for the regression calculation.
+    - source_column: The column to be used as the source of prices.
+    - upper_dev: Multiplier for the upper deviation.
+    - lower_dev: Multiplier for the lower deviation.
+    - show_pearson: Boolean to determine if Pearson's R should be calculated.
 
     Returns:
-    - Dictionary with period, direction, slope, upper, and lower bounds.
+    - Dictionary with keys 'regression', 'upper_channel', 'lower_channel', and optionally 'pearson_r'.
     """
-    results = {}
+    if len(df) < length:
+        raise ValueError("DataFrame is shorter than the specified length for regression calculation.")
 
-    for n in periods:
-        # Ensure we have enough data
-        if len(df) < n:
-            continue  # Skip periods longer than the dataset
+    # Time index for regression calculation
+    time_index = np.arange(length)
 
-        # Extract the last n rows
-        window_df = df.iloc[-n:]
-        time = np.arange(len(window_df))  # Use indices as time variable
-        close_prices = window_df["C"]
+    # Select the source data
+    source_data = df[source_column].tail(length)
 
-        # Calculate Linear Regression Line
-        m, b = np.polyfit(time, close_prices, 1)  # Slope and intercept
-        regression_line = m * time + b
+    # Calculate the coefficients of the linear regression
+    slope, intercept = np.polyfit(time_index, source_data, 1)
 
-        # Calculate Standard Deviation of Residuals
-        residuals = close_prices - regression_line
-        std_dev = np.std(residuals)
+    # Calculate the regression values
+    regression_values = slope * time_index + intercept
 
-        # Upper and Lower Bounds
-        upper_bound = regression_line + upper_dev * std_dev
-        lower_bound = regression_line - lower_dev * std_dev
+    # Calculate residuals and standard deviation
+    residuals = source_data - regression_values
+    standard_deviation = np.std(residuals)
 
-        # Determine Direction
-        direction = "up" if m > 0 else "down"
+    # Calculate upper and lower channels
+    upper_channel = regression_values + upper_dev * standard_deviation
+    lower_channel = regression_values - lower_dev * standard_deviation
 
-        # Save Results in Dictionary
-        results[n] = {
-            "period": n,
-            "direction": direction,
-            "slope": m,  # Slope of the trend
-            "upper": upper_bound[-1],  # Last value of upper bound
-            "lower": lower_bound[-1],  # Last value of lower bound
-        }
+    # Prepare the last value output as dictionary
+    last_values = {
+        'length': length,
+        'regression': regression_values[-1],
+        'upper_channel': upper_channel[-1],
+        'lower_channel': lower_channel[-1]
+    }
 
-    return results
+    # Pearson's R calculation
+    if show_pearson:
+        # Calculate Pearson's R
+        pearson_r = np.corrcoef(time_index, source_data)[0, 1]
+        last_values['pearson_r'] = pearson_r
+
+    return last_values
 
 
 def calculate_atr(df, period=ATR_PERIOD):
@@ -613,7 +617,7 @@ def calculate_fib_levels_pivots(df, pivot_col='pivot', depth=20, deviation=2):
             end_price = pivot_low_price
 
         # Fibonacci levels calculation
-        levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
+        levels = [-0.618, -0.382, -0.236, 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
         fib_levels = {f"fib_{level}": start_price + (end_price - start_price) * level for level in levels}
         fib_levels['swing_high'] = pivot_high_price
         fib_levels['swing_low'] = pivot_low_price
