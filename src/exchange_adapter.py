@@ -334,7 +334,6 @@ class BaseExchangeAdapter:
         _logger.info(f"Fetching trade history for {self.market_futures}")
 
         trade_history = self._exchange.fetch_my_trades(symbol=self.market_futures)
-
         if trade_history:
             self._trade_history = trade_history
             _logger.info(f"Found {len(trade_history)} trades.")
@@ -344,66 +343,102 @@ class BaseExchangeAdapter:
         return trade_history
 
     @staticmethod
-    def process_last_trade_with_sl_tp(trade_history):
+    def aggregate_trades(trades):
         """
-        Processes the last trade in the trade history and determines if it closed a position.
-        Uses 'stopOrderType' and 'createType' to identify if a stop-loss or take-profit was hit.
+        Aggregate trades into fully closed trades with detailed information.
 
-        Args:
-            trade_history (list): A list of trades from the exchange.
-
-        Returns:
-            dict: Last closed trade information in the required format.
+        :param trades: List of trade dictionaries from fetch_my_trades
+        :return: List of aggregated trades with all necessary fields
         """
+        open_positions = []  # Store open positions in FIFO order
+        aggregated_trades = []  # Store resulting fully closed trades
 
-        if not trade_history:
-            return {"last_closed_trade": None}
-
-        last_closed_trade = {}
-        total_buy = 0.0  # Total buy amount
-        total_sell = 0.0  # Total sell amount
-
-        for trade in trade_history:
+        for trade in trades:
+            symbol = trade['symbol']
             side = trade['side']  # 'buy' or 'sell'
-            amount = float(trade['amount'])  # Amount of the trade
-            price = float(trade['price'])  # Trade price
-            timestamp = trade['timestamp']
-            stop_order_type = trade['info'].get('stopOrderType')  # Check stop order type if exists
-            create_type = trade['info'].get(
-                'createType')  # Check create type (e.g., CreateByStopLoss, CreateByTakeProfit)
+            qty = trade['amount']
+            price = trade['price']
+            fee = trade.get('fee', {}).get('cost', 0)
+            fee_rate = trade.get('fee', {}).get('rate', 0)
+            datetime_str = trade['datetime']  # Trade datetime
 
-            # Accumulate buy and sell amounts
-            if side == 'buy':
-                total_buy += amount
-            elif side == 'sell':
-                total_sell += amount
+            if side == 'sell':  # Closing a long or opening a short
+                while qty > 1e-8 and open_positions:
+                    position = open_positions[0]
+                    if position['side'] == 'buy' and position['symbol'] == symbol:  # Match a long position
+                        close_qty = min(qty, position['qty'])
+                        pnl = (price - position['entry_price']) * close_qty  # Long: Exit - Entry
+                        allocated_fee = fee * (close_qty / qty) if qty > 0 else fee
+                        pnl = round(pnl - allocated_fee, 4)  # Net PnL after fees
+                        if abs(close_qty) > 1e-8:  # Ignore near-zero amounts
+                            aggregated_trades.append({
+                                'symbol': symbol,
+                                'amount': close_qty,
+                                'entry_price': position['entry_price'],
+                                'exit_price': price,
+                                'direction': 'Close Long',
+                                'pnl': pnl,
+                                'fee': round(allocated_fee, 8),
+                                'fee_rate': fee_rate,
+                                'trade_type': trade['type'],
+                                'datetime': datetime_str,
+                            })
+                        qty -= close_qty
+                        position['qty'] -= close_qty
+                        if position['qty'] < 1e-8:
+                            open_positions.pop(0)  # Fully closed position
+                    else:
+                        break
 
-            # If the trade was triggered by a stop-loss or take-profit, mark it as such
-            hit_stop_loss = create_type == 'CreateByStopLoss' or stop_order_type == 'StopLoss'
-            hit_take_profit = create_type == 'CreateByTakeProfit' or stop_order_type == 'TakeProfit'
+                # Any remaining quantity is a new short position
+                if qty > 1e-8:
+                    open_positions.append({
+                        'symbol': symbol,
+                        'qty': qty,
+                        'entry_price': price,
+                        'side': 'sell',
+                        'datetime': datetime_str,
+                    })
 
-            # If total buy equals total sell, the position is closed
-            if total_buy == total_sell:
-                # Calculate profit or loss based on the entry price (first trade)
-                entry_price = trade_history[0]['price']
-                profit_or_loss = (price - entry_price) * total_sell if side == 'sell' \
-                    else (entry_price - price) * total_buy
-                outcome = 'profit' if profit_or_loss > 0 else 'loss'
+            elif side == 'buy':  # Closing a short or opening a long
+                while qty > 1e-8 and open_positions:
+                    position = open_positions[0]
+                    if position['side'] == 'sell' and position['symbol'] == symbol:  # Match a short position
+                        close_qty = min(qty, position['qty'])
+                        pnl = (position['entry_price'] - price) * close_qty  # Short: Entry - Exit
+                        allocated_fee = fee * (close_qty / qty) if qty > 0 else fee
+                        pnl = round(pnl - allocated_fee, 4)  # Net PnL after fees
+                        if abs(close_qty) > 1e-8:  # Ignore near-zero amounts
+                            aggregated_trades.append({
+                                'symbol': symbol,
+                                'amount': close_qty,
+                                'entry_price': position['entry_price'],
+                                'exit_price': price,
+                                'direction': 'Close Short',
+                                'pnl': pnl,
+                                'fee': round(allocated_fee, 8),
+                                'fee_rate': fee_rate,
+                                'trade_type': trade['type'],
+                                'datetime': datetime_str,
+                            })
+                        qty -= close_qty
+                        position['qty'] -= close_qty
+                        if position['qty'] < 1e-8:
+                            open_positions.pop(0)  # Fully closed position
+                    else:
+                        break
 
-                # Construct the last closed trade dictionary
-                last_closed_trade = {
-                    "action": "close",
-                    "amount": total_sell if side == 'sell' else total_buy,
-                    "timestamp": timestamp,
-                    "hit_stop_loss": hit_stop_loss,
-                    "hit_take_profit": hit_take_profit,
-                    "outcome": outcome,
-                    "price": price,
-                    "profit_or_loss": round(profit_or_loss, 2),
-                    "side": side
-                }
+                # Any remaining quantity is a new long position
+                if qty > 1e-8:
+                    open_positions.append({
+                        'symbol': symbol,
+                        'qty': qty,
+                        'entry_price': price,
+                        'side': 'buy',
+                        'datetime': datetime_str,
+                    })
 
-        return last_closed_trade if last_closed_trade else None
+        return aggregated_trades
 
     @property
     def open_position_amount(self):

@@ -34,6 +34,28 @@ PERIODS = {
     '3d': 660,
 }
 
+def aggregate_partial_closes(trades_df):
+    """
+    Aggregates partial closes from a DataFrame of trades.
+
+    :param trades_df: DataFrame containing trade details
+    :return: DataFrame with aggregated trades
+    """
+    # Grouping criteria: symbol, entry_price, exit_price, direction, trade_type
+    grouped = trades_df.groupby(
+        ['symbol', 'entry_price', 'exit_price', 'direction', 'trade_type'],
+        as_index=False
+    ).agg({
+        'amount': 'sum',  # Sum the amounts
+        'pnl': 'sum',     # Sum the PnL
+        'fee': 'sum',     # Sum the fees
+        'fee_rate': 'first',  # Keep the first fee rate (assuming it remains consistent)
+        'datetime': 'first'   # Keep the earliest datetime
+    })
+
+    grouped = grouped.sort_values(by="datetime")
+
+    return grouped
 
 def get_next_key(base_key):
     # Convert the keys to a list
@@ -134,7 +156,7 @@ class LlmTrader:
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
-    df_tail_for_agent = 20
+    df_tail_for_agent = 30
     leverage = 2
 
     def __init__(self,
@@ -312,8 +334,12 @@ class LlmTrader:
         if not th:
             return None
 
-        th = self._exchange.process_last_trade_with_sl_tp(th)
-        return th
+        th = self._exchange.aggregate_trades(th)
+        th_df = pd.DataFrame(th)
+        th_df_agg = aggregate_partial_closes(th_df)
+        th_df_agg = th_df_agg.drop(['fee_rate', 'symbol'], axis=1)
+        th_df_agg_tail = th_df_agg.tail(5).to_csv(index=False)
+        return th_df_agg_tail
 
     @staticmethod
     def _calculate_indicators_for_llm_trader(df):
@@ -353,7 +379,7 @@ class LlmTrader:
 
             fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
-            fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
+            # fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
             # lin_reg = calculate_regression_channels_with_slope(df, periods=[20])
 
             merged_df = df.copy()
@@ -370,7 +396,7 @@ class LlmTrader:
                 'timing_info': timing_data,
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
-                'closest_fair_value_gaps_levels': fvg_dict,
+                # 'closest_fair_value_gaps_levels': fvg_dict,
                 # 'linear_regression_channels': lin_reg
             }
         return result_data
@@ -391,7 +417,7 @@ class LlmTrader:
             'price_data': self.price_action_data,
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
-            # 'last_closed_trade': self.trade_history,
+            'last_trades': self.trade_history,
             'last_agent_output': self.last_agent_output,
             # 'exchange_settings': self.exchange_settings
         }
