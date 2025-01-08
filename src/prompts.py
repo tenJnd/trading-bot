@@ -50,6 +50,7 @@ For example:
 ### **4. Adapt to Market Conditions**
 - In choppy or sideways markets, reduce trading frequency. Wait for price to reach key support/resistance levels before considering trades. Avoid mid-range entries.
 - During extreme volatility, reduce position sizes and widen stop-loss/take-profit levels.
+- Adjust trading strategy dynamically based on market volatility. For low-volatility environments, prioritize range-bound strategies; for high-volatility environments, focus on breakout or trend-following strategies.
 - Avoid trading during extended consolidation unless a breakout or breakdown occurs with **volume confirmation** and supporting signals.
 - **Limit trading activity in highly volatile or indecisive markets by increasing the threshold for entering trades.**
 
