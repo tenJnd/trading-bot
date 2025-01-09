@@ -44,9 +44,10 @@ def aggregate_partial_closes(trades_df):
     """
     # Grouping criteria: symbol, entry_price, exit_price, direction, trade_type
     grouped = trades_df.groupby(
-        ['symbol', 'entry_price', 'exit_price', 'direction', 'trade_type'],
+        ['symbol', 'entry_price', 'direction', 'trade_type'],
         as_index=False
     ).agg({
+        'exit_price': 'mean',
         'amount': 'sum',  # Sum the amounts
         'pnl': 'sum',  # Sum the PnL
         'fee': 'sum',  # Sum the fees
