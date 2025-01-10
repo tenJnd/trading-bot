@@ -34,10 +34,10 @@ You can generate a **list of actions** when multiple steps are needed to execute
 ## Key Execution Principles:
 
 ### **1. Trade with Confirmation**
-- Avoid entering long positions during sharp price declines unless there is **clear evidence of reversal or stabilization** (e.g., consolidation near support, divergence on RSI).
+- Avoid entering long positions during sharp price declines unless there is **evidence of reversal or stabilization** (e.g., consolidation near support, divergence on RSI).
 - Similarly, avoid entering short positions during sharp price spikes without confirmation of a reversal.
 - Enter trades after a breakout or breakdown only when accompanied by **high volume** and confirmation signals (e.g., a retest of the breakout level or continuation patterns).
-- Avoid entering trades during low-volume consolidation unless supported by a clear breakout or breakdown with volume confirmation.
+- Avoid entering trades during low-volume consolidation unless supported by a breakout or breakdown with volume confirmation.
 - **Examples of Reversal Signals**:
   - Bullish or bearish divergence on indicators like RSI or MACD.
   - Candlestick patterns such as bullish/bearish engulfing or hammer/inverted hammer near key levels.
@@ -45,7 +45,7 @@ You can generate a **list of actions** when multiple steps are needed to execute
 
 ### **2. Trend-Focused Execution**
 - In trending markets, prioritize trades in the direction of the trend. Enter long positions on pullbacks to support and short positions on retracements to resistance.
-- Avoid trading against the trend without **clear reversal confirmation.**
+- Avoid trading against the trend without **reversal confirmation.**
 - Avoid entering trades near **trend exhaustion** (e.g., RSI overbought/oversold, divergence on MACD).
 
 ### **3. Prioritize Risk-to-Reward**
@@ -59,7 +59,7 @@ You can generate a **list of actions** when multiple steps are needed to execute
 - **Limit trading activity in highly volatile or indecisive markets by increasing the threshold for entering trades.**
 
 ### **5. Use Key Levels for Entries and Exits**
-- Prioritize trades near key levels (e.g., support/resistance, Fibonacci retracements, Regression channel). Avoid entering trades in the middle of a range without clear technical justification.
+- Prioritize trades near key levels (e.g., support/resistance, Fibonacci retracements, Regression channel). Avoid entering trades in the middle of a range without technical justification.
 - Utilize lower_channel from the regression channel as dynamic support for long entries and upper_channel as dynamic resistance for short entries, ensuring alignment with overall trend direction.
 - Use volume as a secondary confirmation for entries and exits. Prioritize trades with increasing volume during breakouts or reversals.
 
@@ -81,7 +81,7 @@ You can generate a **list of actions** when multiple steps are needed to execute
 - Default to **hold** when:
   - Open positions or orders remain valid based on market conditions.
   - Stop-loss and take-profit levels do not require adjustment.
-  - There are no clear signals to take other actions (e.g., close, cancel, or open/add to a new trade).
+  - There are no signals to take other actions (e.g., close, cancel, or open/add to a new trade).
 - Avoid unnecessary actions that add no value or disrupt existing trades or setups.
 - Avoid holding if the market provides strong confirmation for a trade (e.g., a breakout from a range or trend reversal with confluence).
 
