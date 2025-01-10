@@ -382,60 +382,45 @@ def calculate_closest_fvg_zones(df, current_price, threshold_percentage=2.0):
     return result
 
 
-def calculate_regression_channels_as_dict(df, length=100, source_column='C', upper_dev=2.0, lower_dev=2.0,
-                                          show_pearson=True):
-    """
-    Calculate linear regression channels and return the last values as a dictionary.
-
-    Parameters:
-    - df: DataFrame containing at least the 'close' column.
-    - length: Number of periods for the regression calculation.
-    - source_column: The column to be used as the source of prices.
-    - upper_dev: Multiplier for the upper deviation.
-    - lower_dev: Multiplier for the lower deviation.
-    - show_pearson: Boolean to determine if Pearson's R should be calculated.
-
-    Returns:
-    - Dictionary with keys 'regression', 'upper_channel', 'lower_channel', and optionally 'pearson_r'.
-    """
+def calculate_regression_channels(df, length=100, source_column='C', upper_dev=2.0, lower_dev=2.0):
     if len(df) < length:
         raise ValueError("DataFrame is shorter than the specified length for regression calculation.")
 
-    # Time index for regression calculation
+    # Prepare lists to store the values
+    regression_vals = [np.nan] * len(df)
+    upper_channel_vals = [np.nan] * len(df)
+    lower_channel_vals = [np.nan] * len(df)
+
+    # Time index for regression calculation for each window
     time_index = np.arange(length)
 
-    # Select the source data
-    source_data = df[source_column].tail(length)
+    for start_idx in range(len(df) - length + 1):
+        end_idx = start_idx + length
 
-    # Calculate the coefficients of the linear regression
-    slope, intercept = np.polyfit(time_index, source_data, 1)
+        # Select the source data
+        source_data = df[source_column].iloc[start_idx:end_idx]
 
-    # Calculate the regression values
-    regression_values = slope * time_index + intercept
+        # Calculate the coefficients of the linear regression
+        slope, intercept = np.polyfit(time_index, source_data, 1)
 
-    # Calculate residuals and standard deviation
-    residuals = source_data - regression_values
-    standard_deviation = np.std(residuals)
+        # Calculate the regression values and channels
+        regression_values = slope * time_index + intercept
+        residuals = source_data - regression_values
+        standard_deviation = np.std(residuals)
+        upper_channel = regression_values + upper_dev * standard_deviation
+        lower_channel = regression_values - lower_dev * standard_deviation
 
-    # Calculate upper and lower channels
-    upper_channel = regression_values + upper_dev * standard_deviation
-    lower_channel = regression_values - lower_dev * standard_deviation
+        # Store calculated values in lists
+        regression_vals[start_idx:end_idx] = regression_values
+        upper_channel_vals[start_idx:end_idx] = upper_channel
+        lower_channel_vals[start_idx:end_idx] = lower_channel
 
-    # Prepare the last value output as dictionary
-    last_values = {
-        'length': length,
-        'regression': regression_values[-1],
-        'upper_channel': upper_channel[-1],
-        'lower_channel': lower_channel[-1]
-    }
+    # Assign lists to DataFrame columns
+    df['regression'] = round_series(regression_vals, 3)
+    df['regression_upper_channel'] = round_series(upper_channel_vals, 3)
+    df['regression_lower_channel'] = round_series(lower_channel_vals, 3)
 
-    # Pearson's R calculation
-    if show_pearson:
-        # Calculate Pearson's R
-        pearson_r = np.corrcoef(time_index, source_data)[0, 1]
-        last_values['pearson_r'] = pearson_r
-
-    return last_values
+    return df
 
 
 def calculate_atr(df, period=ATR_PERIOD):

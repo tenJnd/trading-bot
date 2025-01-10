@@ -22,7 +22,8 @@ from src.utils.utils import (calculate_sma, round_series,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
                              calculate_fib_levels_pivots,
-                             calculate_regression_channels_as_dict, calculate_closest_fvg_zones)
+                             calculate_closest_fvg_zones,
+                             calculate_regression_channels)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -369,6 +370,7 @@ class LlmTrader:
 
             df.set_index('timeframe', inplace=True)
             df = self._calculate_indicators_for_llm_trader(df)
+            df = calculate_regression_channels(df, length=50)
 
             # df = shorten_large_numbers(df, 'obv')
             # df = shorten_large_numbers(df, 'obv_sma_20')
@@ -383,13 +385,12 @@ class LlmTrader:
             fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
-            lin_reg = calculate_regression_channels_as_dict(df, length=50)
 
             merged_df = df.copy()
             if oi is not None:
                 merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
 
-            merged_df = merged_df.drop(['datetime'], axis=1)
+            # merged_df = merged_df.drop(['datetime'], axis=1)
             df_tail = merged_df.tail(tail)
             price_data_csv = df_tail.to_csv()
 
@@ -400,7 +401,6 @@ class LlmTrader:
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
                 'closest_fair_value_gaps_levels': fvg_dict,
-                'linear_regression_channels': lin_reg
             }
         return result_data
 
