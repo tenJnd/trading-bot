@@ -22,7 +22,7 @@ from src.utils.utils import (calculate_sma, round_series,
                              dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
                              calculate_fib_levels_pivots,
-                             calculate_regression_channels_as_dict)
+                             calculate_regression_channels_as_dict, calculate_closest_fvg_zones)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -382,7 +382,7 @@ class LlmTrader:
 
             fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
-            # fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
+            fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
             lin_reg = calculate_regression_channels_as_dict(df, length=50)
 
             merged_df = df.copy()
@@ -399,7 +399,7 @@ class LlmTrader:
                 'timing_info': timing_data,
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
-                # 'closest_fair_value_gaps_levels': fvg_dict,
+                'closest_fair_value_gaps_levels': fvg_dict,
                 'linear_regression_channels': lin_reg
             }
         return result_data

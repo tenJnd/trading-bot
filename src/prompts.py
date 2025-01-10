@@ -95,6 +95,7 @@ You can generate a **list of actions** when multiple steps are needed to execute
        - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
        - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., Volume MA, ATR, SMA, RSI, MACD, BB, OI etc.).
        - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
+       - **Fair value gaps**: A dictionary of closest fair value gabs
        - **Linear Regression channel**: A dictionary of regression channel values. 
      - **1d**: Includes:
        - Same data structure as the 4h timeframe but used only for broader context (e.g., trend confirmation, key levels).
