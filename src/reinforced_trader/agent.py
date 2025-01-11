@@ -45,7 +45,7 @@ class TradingEnv(gym.Env):
         self.asset_held = 0
         self.step_returns = []
         self.max_balance = initial_investment
-        self.action_space = spaces.Discrete(3)  # 0: hold, 1: buy, 2: sell
+        self.action_space = spaces.Discrete(4)  # 0: hold, 1: buy, 2: sell, 3: close
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
                                             shape=(data_shape_len,),
                                             dtype=np.float32)
@@ -68,15 +68,35 @@ class TradingEnv(gym.Env):
         if self.current_step >= len(self.data) - 1:
             self.done = True
 
-        # Get the current market price and 2ATR for stop-loss calculation
+        # Get the current market price
         current_price = self.orig_data.iloc[self.current_step]['C']
+        # Fetch the previous candle's high and low
+        previous_low = self.orig_data.iloc[self.current_step - 1]['L'] if self.current_step > 0 else self.entry_price
+        previous_high = self.orig_data.iloc[self.current_step - 1]['H'] if self.current_step > 0 else self.entry_price
         atr = self.orig_data.iloc[self.current_step]['atr_20']  # Assume ATR is a feature in the dataset
         transaction_cost = 0.0001  # Fixed transaction cost (example value)
 
         # Initialize variables
         reward = 0
         profit = 0
-        stop_loss_price = None  # Ensure stop_loss_price is always initialized
+        stop_loss_price = None
+
+        if self.position == 1:
+            stop_loss_price = self.entry_price - (2 * atr)
+        elif self.position == -1:
+            stop_loss_price = self.entry_price + (2 * atr)
+
+        # Check if a stop-loss should be triggered using the previous high and low
+        if self.position != 0 and stop_loss_price is not None:
+            if (self.position == 1 and previous_low <= stop_loss_price) or \
+                    (self.position == -1 and previous_high >= stop_loss_price):
+                profit = (self.entry_price - current_price) * self.asset_held if self.position == 1 else \
+                    (current_price - self.entry_price) * self.asset_held
+                self.balance += profit
+                self.position = 0  # Reset position
+                self.entry_price = 0
+                self.asset_held = 0
+                reward -= 5  # Penalize for stop-loss trigger
 
         # Handle actions based on the agent's choice
         if action == 1:  # Buy/Long
@@ -87,9 +107,9 @@ class TradingEnv(gym.Env):
                     profit = diff * self.asset_held
                     self.balance += profit  # Realize profit/loss
                 # Calculate position size to risk 1% of total balance
-                stop_loss_price = current_price - (2 * atr)  # Stop-loss is 2ATR below entry price
+                stop_loss_price = current_price - (3 * atr)  # Stop-loss is 2ATR below entry price
                 stop_loss_distance = abs(current_price - stop_loss_price)
-                position_size = (self.balance * 0.02) / stop_loss_distance if stop_loss_distance > 0 else 0
+                position_size = (self.balance * 0.03) / stop_loss_distance if stop_loss_distance > 0 else 0
                 self.asset_held = position_size
                 self.entry_price = current_price
                 self.position = 1  # Set position to long
@@ -102,23 +122,25 @@ class TradingEnv(gym.Env):
                     profit = diff * self.asset_held
                     self.balance += profit  # Realize profit/loss
                 # Calculate position size to risk 1% of total balance
-                stop_loss_price = current_price + (2 * atr)  # Stop-loss is 2ATR above entry price
+                stop_loss_price = current_price + (3 * atr)  # Stop-loss is 2ATR above entry price
                 stop_loss_distance = abs(current_price - stop_loss_price)
-                position_size = (self.balance * 0.02) / stop_loss_distance if stop_loss_distance > 0 else 0
+                position_size = (self.balance * 0.03) / stop_loss_distance if stop_loss_distance > 0 else 0
                 self.asset_held = position_size
                 self.entry_price = current_price
                 self.position = -1  # Set position to short
 
-        # Check if stop-loss is triggered
-        if self.position != 0 and stop_loss_price is not None:  # Only check if there is an open position
-            if (self.position == 1 and current_price <= stop_loss_price) or \
-                    (self.position == -1 and current_price >= stop_loss_price):
-                # Stop-loss triggered
-                profit = (self.entry_price - current_price) * self.asset_held if self.position == 1 else \
-                    (current_price - self.entry_price) * self.asset_held
-                self.balance += profit
-                self.position = 0  # Reset position
-                reward -= 10  # Penalize stop-loss trigger
+        elif action == 3:  # Close position
+            if self.position != 0:
+                if self.position == 1:  # Close long position
+                    profit = (current_price - self.entry_price) * self.asset_held
+                elif self.position == -1:  # Close short position
+                    profit = (self.entry_price - current_price) * self.asset_held
+
+                self.balance += profit - self.balance * transaction_cost
+                reward += profit  # Adjust reward based on the profit from closing the position
+                self.position = 0
+                self.entry_price = 0
+                self.asset_held = 0
 
         # Calculate daily return for rewards
         step_return = ((self.balance - previous_balance) / previous_balance
@@ -352,7 +374,9 @@ class ModelTrainer:
                                      f"balance: {info['balance']}, "
                                      f"Total Reward: {round(total_reward, 1)}, "
                                      f"Total Profit: {round(total_profit, 1)}, "
+                                     f"Total Sum profits: {round(sum(total_profits), 1)} "
                                      f"Sharpe Ratio: {round(np.mean(episode_sharpe_ratios), 4)}, "
+                                     f"Total Mean Sharpe Ratio: {round(np.mean(sharpe_ratios), 4)}, "
                                      f"Max Drawdown: {round(episode_max_drawdown, 3)}, "
                                      f"Profitable Trades: {episode_profitable_trades} "
                                      f"Loss Trades: {episode_loss_trades}")
@@ -396,7 +420,7 @@ def load_model(model_name='trading_model.h5'):
 
 if __name__ == '__main__':
     init_logging()
-    length = 120
+    length_days = 20
     timeframe = '30m'
     groups = 'day'
 
@@ -406,7 +430,7 @@ if __name__ == '__main__':
     exchange_adapter.market = 'BTC'
 
     data, data_shape_len, groups_len = prepare_training_data(
-        exchange_adapter, days=length, timeframe=timeframe, group_by=groups
+        exchange_adapter, days=length_days, timeframe=timeframe, group_by=groups
     )
 
     # Initialize environment and agent
