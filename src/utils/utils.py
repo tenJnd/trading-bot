@@ -602,46 +602,32 @@ def calculate_fib_levels_pivots(df, depth=20, deviation=2):
     return None  # Return None if the pivots could not be determined
 
 
-def calculate_fib_levels_rolling(df, pivot_col='pivot', depth=20, deviation=2):
+def calculate_fib_levels_rolling(df, depth=20, deviation=2):
     """
     Continuously calculate and update Fibonacci retracement levels in new columns
     of the DataFrame using a rolling window approach.
 
     Parameters:
-    - df: DataFrame containing at least the 'pivot' column.
-    - pivot_col: The column to be used to find pivots.
+    - df: DataFrame containing at least 'H', 'L', and 'C' columns.
     - depth: Number of periods for the pivot calculation.
     - deviation: Multiplier for the pivot deviation.
     """
-    # Ensure we are working on a copy to prevent SettingWithCopyWarning
-    df = df.copy()
-
     # Initialize columns for each Fibonacci level
-    levels = [-0.618, -0.382, -0.236, 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
+    levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
     for level in levels:
-        df[f'fib_{abs(level):.3f}'.replace('.', '_')] = np.nan
+        df[f'fib_{abs(level):.3f}'] = np.nan
 
     # Calculate Fibonacci levels for each rolling window of 'depth' length
-    for start_idx in range(len(df) - depth + 1):
-        end_idx = start_idx + depth
-        sub_df = df.iloc[start_idx:end_idx].copy()  # Use .copy() to avoid SettingWithCopyWarning
-        pivots = find_pivots(sub_df, depth, deviation)
-        last_pivot_high = pivots[pivots[pivot_col] == pivots['H']].last_valid_index()
-        last_pivot_low = pivots[pivots[pivot_col] == pivots['L']].last_valid_index()
+    for i in range(len(df) - depth + 1):
+        end_idx = i + depth
+        sub_df = df.iloc[i:end_idx]
+        fib_levels = calculate_fib_levels_pivots(sub_df, depth, deviation)
 
-        if pd.notna(last_pivot_high) and pd.notna(last_pivot_low):
-            pivot_high_price = pivots.at[last_pivot_high, 'H']
-            pivot_low_price = pivots.at[last_pivot_low, 'L']
-
-            # Determine trend
-            start_price, end_price = (pivot_low_price, pivot_high_price) \
-                if last_pivot_high < last_pivot_low else (pivot_high_price, pivot_low_price)
-
-            # Assign Fibonacci levels to the DataFrame
+        if fib_levels:
+            # Assign Fibonacci levels to the DataFrame at the end of the window
             for level in levels:
-                fib_level = start_price + (end_price - start_price) * level
-                col_name = f'fib_{abs(level):.3f}'.replace('.', '_')
-                df.loc[end_idx - 1, col_name] = fib_level
+                col_name = f'fib_{abs(level):.3f}'
+                df.at[end_idx - 1, col_name] = fib_levels[f'fib_{abs(level):.3f}']
 
     return df
 
