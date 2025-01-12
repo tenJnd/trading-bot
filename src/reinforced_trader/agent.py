@@ -374,7 +374,7 @@ class ModelTrainer:
                                      f"balance: {info['balance']}, "
                                      f"Total Reward: {round(total_reward, 1)}, "
                                      f"Total Profit: {round(total_profit, 1)}, "
-                                     f"Total Sum profits: {round(sum(total_profits), 1)} "
+                                     f"Total Sum profits: {round(sum(total_profits), 1)}, "
                                      f"Sharpe Ratio: {round(np.mean(episode_sharpe_ratios), 4)}, "
                                      f"Total Mean Sharpe Ratio: {round(np.mean(sharpe_ratios), 4)}, "
                                      f"Max Drawdown: {round(episode_max_drawdown, 3)}, "
@@ -386,7 +386,7 @@ class ModelTrainer:
                     if episode_count % 5 == 0:  # Update target model periodically
                         agent.update_target_model()
 
-            plot_training_performance(total_rewards, 'data/training_plot.png')
+            plot_training_performance(total_rewards, 'training_plot.png')
         return agent
 
 
@@ -420,7 +420,7 @@ def load_model(model_name='trading_model.h5'):
 
 if __name__ == '__main__':
     init_logging()
-    length_days = 20
+    length_days = 30
     timeframe = '30m'
     groups = 'day'
 
