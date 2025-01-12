@@ -163,6 +163,8 @@ class LlmTrader:
     llm_model_config = TraderModel
     df_tail_for_agent = 30
     leverage = 2
+    margin = 0.1
+    risk_per_trade = 0.01  # 1% risk per trade * leverage!! -> 2%
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -234,7 +236,7 @@ class LlmTrader:
 
     def get_exchange_settings(self):
         _logger.info("getting exchange settings...")
-        free_balance = round(self._exchange.free_balance, 0)
+        free_balance = round(self._exchange.free_balance * (1 - self.margin), 0)
         total_balance = round(self._exchange.total_balance, 0)
         max_amount = dynamic_safe_round(free_balance / self.last_close_price, 2)
         return {
@@ -659,8 +661,14 @@ class LlmTrader:
 
         # Calculate the potential risk per trade
         move_against = abs(agent_action.stop_loss - c_price)
-        trade_risk_cap = (self._exchange.free_balance * 0.9) * 0.01  # 1% risk per trade * leverage!!
-        raw_amount = (trade_risk_cap / move_against) * self.leverage
+        free_balance = self._exchange.free_balance * (1 - self.margin)
+        trade_risk_cap = free_balance * self.risk_per_trade
+
+        # if the stop-loss is too tight, the amount will exes free capital.
+        # -> we need to assign raw amount to max amount based on free capital
+        max_amount = free_balance / close_price
+        raw_amount = trade_risk_cap / move_against
+        raw_amount = min(max_amount, raw_amount) * self.leverage
 
         # Check if the raw amount is below the exchange's minimum tradable amount
         if raw_amount < self._exchange.min_amount:
