@@ -2,6 +2,7 @@ import logging
 import os
 import random
 from collections import deque
+from datetime import datetime
 
 import gym
 import matplotlib.pyplot as plt
@@ -51,17 +52,6 @@ class TradingEnv(gym.Env):
                                             dtype=np.float32)
 
     def step(self, action):
-        """
-        Executes a step in the environment based on the agent's action.
-
-        Args:
-            action (int): The action taken by the agent.
-                          0: Hold, 1: Buy/Long, 2: Sell/Short
-
-        Returns:
-            tuple: (next_state, reward, done, info)
-        """
-        # Save the previous balance to calculate returns and rewards
         previous_balance = self.balance
 
         # Check if we've reached the end of the dataset
@@ -70,113 +60,91 @@ class TradingEnv(gym.Env):
 
         # Get the current market price
         current_price = self.orig_data.iloc[self.current_step]['C']
-        # Fetch the previous candle's high and low
         previous_low = self.orig_data.iloc[self.current_step - 1]['L'] if self.current_step > 0 else self.entry_price
         previous_high = self.orig_data.iloc[self.current_step - 1]['H'] if self.current_step > 0 else self.entry_price
-        atr = self.orig_data.iloc[self.current_step]['atr_20']  # Assume ATR is a feature in the dataset
-        transaction_cost = 0.0001  # Fixed transaction cost (example value)
+        atr = self.orig_data.iloc[self.current_step]['atr_20']
+        transaction_cost = 0.0001
 
-        # Initialize variables
         reward = 0
-        profit = 0
-        stop_loss_price = None
+        actual_profit = 0
+        stop_loss_price = self.entry_price - (3 * atr) if self.position == 1 else self.entry_price + (
+                    3 * atr) if self.position == -1 else None
 
-        if self.position == 1:
-            stop_loss_price = self.entry_price - (2 * atr)
-        elif self.position == -1:
-            stop_loss_price = self.entry_price + (2 * atr)
-
-        # Check if a stop-loss should be triggered using the previous high and low
         if self.position != 0 and stop_loss_price is not None:
-            if (self.position == 1 and previous_low <= stop_loss_price) or \
-                    (self.position == -1 and previous_high >= stop_loss_price):
-                profit = (self.entry_price - current_price) * self.asset_held if self.position == 1 else \
-                    (current_price - self.entry_price) * self.asset_held
-                self.balance += profit
-                self.position = 0  # Reset position
-                self.entry_price = 0
-                self.asset_held = 0
-                reward -= 5  # Penalize for stop-loss trigger
+            if (self.position == 1 and previous_low <= stop_loss_price) or (
+                    self.position == -1 and previous_high >= stop_loss_price):
+                actual_profit, profit_percent_trade = self.close_position(current_price, transaction_cost)
 
-        # Handle actions based on the agent's choice
-        if action == 1:  # Buy/Long
-            if self.position in [0, -1]:  # If not already long or closing a short
-                self.balance -= self.balance * transaction_cost  # Deduct transaction cost
-                if self.position == -1:  # Closing a short position
-                    diff = self.entry_price - current_price
-                    profit = diff * self.asset_held
-                    self.balance += profit  # Realize profit/loss
-                # Calculate position size to risk 1% of total balance
-                stop_loss_price = current_price - (3 * atr)  # Stop-loss is 2ATR below entry price
-                stop_loss_distance = abs(current_price - stop_loss_price)
-                position_size = (self.balance * 0.03) / stop_loss_distance if stop_loss_distance > 0 else 0
+        # Execute trading actions
+        if action == 1 or action == 2:  # Buy/Long or Sell/Short
+            new_position = 1 if action == 1 else -1
+            # Only close the position if the action is in the opposite direction
+            if self.position != new_position:
+                actual_profit, profit_percent_trade = self.close_position(current_price, transaction_cost)
+                profit_percent = (actual_profit / previous_balance) * 100 if previous_balance != 0 else 0
+                reward += profit_percent
+
+                stop_loss_distance = 3 * atr
+                position_size = (self.balance * 0.05) / stop_loss_distance
                 self.asset_held = position_size
                 self.entry_price = current_price
-                self.position = 1  # Set position to long
-
-        elif action == 2:  # Sell/Short
-            if self.position in [0, 1]:  # If not already short or closing a long
-                self.balance -= self.balance * transaction_cost  # Deduct transaction cost
-                if self.position == 1:  # Closing a long position
-                    diff = current_price - self.entry_price
-                    profit = diff * self.asset_held
-                    self.balance += profit  # Realize profit/loss
-                # Calculate position size to risk 1% of total balance
-                stop_loss_price = current_price + (3 * atr)  # Stop-loss is 2ATR above entry price
-                stop_loss_distance = abs(current_price - stop_loss_price)
-                position_size = (self.balance * 0.03) / stop_loss_distance if stop_loss_distance > 0 else 0
-                self.asset_held = position_size
-                self.entry_price = current_price
-                self.position = -1  # Set position to short
+                self.position = new_position
 
         elif action == 3:  # Close position
-            if self.position != 0:
-                if self.position == 1:  # Close long position
-                    profit = (current_price - self.entry_price) * self.asset_held
-                elif self.position == -1:  # Close short position
-                    profit = (self.entry_price - current_price) * self.asset_held
+            actual_profit, profit_percent_trade = self.close_position(current_price, transaction_cost)
 
-                self.balance += profit - self.balance * transaction_cost
-                reward += profit  # Adjust reward based on the profit from closing the position
-                self.position = 0
-                self.entry_price = 0
-                self.asset_held = 0
+        if actual_profit != 0 and previous_balance != 0:
+            profit_percent = (actual_profit / previous_balance) * 100
+            reward += actual_profit
 
-        # Calculate daily return for rewards
-        step_return = ((self.balance - previous_balance) / previous_balance
-                       if previous_balance != 0 else 0)
+        step_return = ((self.balance - previous_balance) / previous_balance if previous_balance != 0 else 0)
         self.step_returns.append(step_return)
 
-        # Rolling metrics (Sharpe ratio and drawdown)
-        window_size = min(len(self.data) - 1, len(self.step_returns))
-        sharpe_ratio = (np.mean(self.step_returns[-window_size:]) /
-                        np.std(self.step_returns[-window_size:])
-                        if np.std(self.step_returns[-window_size:]) != 0 else 0)
-        drawdown = ((self.max_balance - self.balance) / self.max_balance
-                    if self.max_balance != 0 else 0)
+        sharpe_ratio = self.calculate_sharpe_ratio(10)
 
-        # Update maximum balance observed
+        drawdown = ((self.max_balance - self.balance) / self.max_balance if self.max_balance != 0 else 0)
         self.max_balance = max(self.max_balance, self.balance)
+        risk_adjusted_reward = reward
 
-        # Risk-adjusted reward
-        risk_adjusted_reward = profit - (drawdown * 2) + (sharpe_ratio * 0.5)
-        reward += risk_adjusted_reward
-
-        # Prepare the next state for the agent
         next_state = self.data.iloc[self.current_step]
-
-        # Additional info for logging and monitoring
         info = {
-            'profit': round(profit, 1),
+            'reward': reward,
+            'profit': round(actual_profit, 1),
             'balance': round(self.balance, 1),
             'sharpe_ratio': round(sharpe_ratio, 2),
             'drawdown': round(drawdown, 5),
             'stop_loss': stop_loss_price
         }
+        #_logger.info(info)
 
-        # Increment step count
         self.current_step += 1
-        return next_state, reward, self.done, info
+        return next_state, risk_adjusted_reward, self.done, info
+
+    def close_position(self, current_price, transaction_cost):
+        if self.position != 0:
+            price_difference = (current_price - self.entry_price) if self.position == 1 else (
+                        self.entry_price - current_price)
+            profit = price_difference * self.asset_held
+            transaction_cost_amount = self.asset_held * current_price * transaction_cost
+            actual_profit = profit - transaction_cost_amount
+            self.balance += actual_profit
+            profit_percent = (actual_profit / (self.entry_price * self.asset_held)) * 100
+            self.position = 0
+            self.entry_price = 0
+            self.asset_held = 0
+            return actual_profit, profit_percent
+        return 0, 0
+
+    def calculate_sharpe_ratio(self, window_size=100):
+        if len(self.step_returns) >= window_size:
+            std_dev = np.std(self.step_returns[-window_size:])
+            if std_dev > 0:
+                sharpe_ratio = np.mean(self.step_returns[-window_size:]) / std_dev
+            else:
+                sharpe_ratio = 0
+        else:
+            sharpe_ratio = 0
+        return sharpe_ratio
 
     def reset(self, scaled_data, orig_data):
         self.current_step = 0
@@ -291,6 +259,12 @@ class ModelTrainer:
         self.zipp_groups = zipped_groups
         self.num_of_episodes = num_of_groups
 
+        log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=log_dir, histogram_freq=1, write_graph=True,
+            write_images=True, profile_batch='500,520'
+        )
+
         self.logger = TrainingLogger()
         self.model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
             filepath=self.checkpoint_filepath,
@@ -358,7 +332,9 @@ class ModelTrainer:
                     agent.remember(state, action, reward, next_state, done)
                     state = next_state
 
+                    #\\d_logger.info("creating replays...")
                     agent.replay(group_len * 3, callbacks=[
+                        self.tensorboard_callback,
                         self.model_checkpoint_callback,
                         self.early_stopping_callback,
                         # Other callbacks...
@@ -420,8 +396,8 @@ def load_model(model_name='trading_model.h5'):
 
 if __name__ == '__main__':
     init_logging()
-    length_days = 30
-    timeframe = '30m'
+    length_days = 50
+    timeframe = '1h'
     groups = 'day'
 
     # Assume 'data' is your preprocessed DataFrame

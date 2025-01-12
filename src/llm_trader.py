@@ -30,9 +30,10 @@ _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
 
 # Example dictionary
 PERIODS = {
-    '4h': 40,
-    '1d': 220,
-    '3d': 660,
+    '1h': 5,
+    '4h': 20,
+    '1d': 120,
+    '3d': 360,
 }
 
 
@@ -375,7 +376,7 @@ class LlmTrader:
             # df = shorten_large_numbers(df, 'obv')
             # df = shorten_large_numbers(df, 'obv_sma_20')
 
-            if timeframe == '1d':
+            if timeframe != base_timeframe:
                 fib_depth = 10
                 tail = int(self.df_tail_for_agent / 2)
             else:

@@ -580,7 +580,6 @@ def find_pivots(df, depth, deviation):
         return None
 
 
-
 def calculate_fib_levels_pivots(df, depth=20, deviation=2):
     result = find_pivots(df, depth, deviation)
     if result:
@@ -603,28 +602,27 @@ def calculate_fib_levels_pivots(df, depth=20, deviation=2):
 
 
 def calculate_fib_levels_rolling(df, depth=20):
-        last_pivot_high = None
-        last_pivot_low = None
+    last_pivot_high = None
+    last_pivot_low = None
 
-        for index, row in df.iterrows():
-            current_high = row['H']
-            current_low = row['L']
+    for index, row in df.iterrows():
+        current_high = row['H']
+        current_low = row['L']
 
-            if last_pivot_high is None or current_high > last_pivot_high[0]:
-                last_pivot_high = (current_high, index)
-            if last_pivot_low is None or current_low < last_pivot_low[0]:
-                last_pivot_low = (current_low, index)
+        if last_pivot_high is None or current_high > last_pivot_high[0]:
+            last_pivot_high = (current_high, index)
+        if last_pivot_low is None or current_low < last_pivot_low[0]:
+            last_pivot_low = (current_low, index)
 
-            if index >= depth + 1 and last_pivot_high and last_pivot_low:
-                sub_df = df.loc[:index]
-                fib_levels = calculate_fib_levels_pivots(sub_df)
-                if not fib_levels:
-                    continue
-                for level, value in fib_levels.items():
-                    df.at[index, level] = value
+        if index >= depth + 1 and last_pivot_high and last_pivot_low:
+            sub_df = df.loc[:index]
+            fib_levels = calculate_fib_levels_pivots(sub_df)
+            if not fib_levels:
+                continue
+            for level, value in fib_levels.items():
+                df.at[index, level] = value
 
-        return df  # Now the DataFrame is updated directly
-
+    return df  # Now the DataFrame is updated directly
 
 
 def save_total_balance(exchange_id, total_balance, sub_account_id):
