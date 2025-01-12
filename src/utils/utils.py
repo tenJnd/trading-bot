@@ -565,7 +565,6 @@ def find_pivots(df, depth, deviation):
     pivot_highs = (df['H'].rolling(window=depth, center=True).max() == df['H']) & high_deviation
     pivot_lows = (df['L'].rolling(window=depth, center=True).min() == df['L']) & low_deviation
 
-    # Finding the last pivot high and low indices
     last_pivot_high_index = pivot_highs[pivot_highs].last_valid_index()
     last_pivot_low_index = pivot_lows[pivot_lows].last_valid_index()
 
@@ -579,6 +578,7 @@ def find_pivots(df, depth, deviation):
         return pivot_high, pivot_low
     else:
         return None
+
 
 
 def calculate_fib_levels_pivots(df, depth=20, deviation=2):
@@ -602,34 +602,29 @@ def calculate_fib_levels_pivots(df, depth=20, deviation=2):
     return None  # Return None if the pivots could not be determined
 
 
-def calculate_fib_levels_rolling(df, depth=20, deviation=2):
-    """
-    Continuously calculate and update Fibonacci retracement levels in new columns
-    of the DataFrame using a rolling window approach.
+def calculate_fib_levels_rolling(df, depth=20):
+        last_pivot_high = None
+        last_pivot_low = None
 
-    Parameters:
-    - df: DataFrame containing at least 'H', 'L', and 'C' columns.
-    - depth: Number of periods for the pivot calculation.
-    - deviation: Multiplier for the pivot deviation.
-    """
-    # Initialize columns for each Fibonacci level
-    levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
-    for level in levels:
-        df[f'fib_{abs(level):.3f}'] = np.nan
+        for index, row in df.iterrows():
+            current_high = row['H']
+            current_low = row['L']
 
-    # Calculate Fibonacci levels for each rolling window of 'depth' length
-    for i in range(len(df) - depth + 1):
-        end_idx = i + depth
-        sub_df = df.iloc[i:end_idx]
-        fib_levels = calculate_fib_levels_pivots(sub_df, depth, deviation)
+            if last_pivot_high is None or current_high > last_pivot_high[0]:
+                last_pivot_high = (current_high, index)
+            if last_pivot_low is None or current_low < last_pivot_low[0]:
+                last_pivot_low = (current_low, index)
 
-        if fib_levels:
-            # Assign Fibonacci levels to the DataFrame at the end of the window
-            for level in levels:
-                col_name = f'fib_{abs(level):.3f}'
-                df.at[end_idx - 1, col_name] = fib_levels[f'fib_{abs(level):.3f}']
+            if index >= depth + 1 and last_pivot_high and last_pivot_low:
+                sub_df = df.loc[:index]
+                fib_levels = calculate_fib_levels_pivots(sub_df)
+                if not fib_levels:
+                    continue
+                for level, value in fib_levels.items():
+                    df.at[index, level] = value
 
-    return df
+        return df  # Now the DataFrame is updated directly
+
 
 
 def save_total_balance(exchange_id, total_balance, sub_account_id):
