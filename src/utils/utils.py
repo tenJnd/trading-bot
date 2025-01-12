@@ -10,7 +10,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-from src.config import TRADING_DATA_DIR, ATR_PERIOD, TURTLE_ENTRY_DAYS, TURTLE_EXIT_DAYS
+from src.config import TRADING_DATA_DIR, TURTLE_ENTRY_DAYS, TURTLE_EXIT_DAYS
 from src.model import trader_database
 from src.model.turtle_model import StrategySettings, BalanceReport
 from src.schemas.turtle_schema import OrderSchema
@@ -423,31 +423,14 @@ def calculate_regression_channels(df, length=100, source_column='C', upper_dev=2
     return df
 
 
-def calculate_atr(df, period=ATR_PERIOD):
-    """
-    Calculate the Average True Range (ATR) for given OHLCV DataFrame.
-
-    Parameters:
-    - df: pandas DataFrame with columns 'H', 'L', and 'C'.
-    - period: the period over which to calculate the ATR.
-
-    Returns:
-    - A pandas Series representing the ATR.
-    """
-    # Calculate true ranges
-    df['high_low'] = df['H'] - df['L']
-    df['high_prev_close'] = abs(df['H'] - df['C'].shift(1))
-    df['low_prev_close'] = abs(df['L'] - df['C'].shift(1))
-
-    # Find the max of the true ranges
-    df['true_range'] = df[['high_low', 'high_prev_close', 'low_prev_close']].max(axis=1)
-
-    # Calculate the ATR
-    atr = round_series(df['true_range'].rolling(window=period, min_periods=1).mean())
-
-    # Clean up the DataFrame by removing the intermediate columns
-    df.drop(['high_low', 'high_prev_close', 'low_prev_close', 'true_range'], axis=1, inplace=True)
-
+def calculate_atr(df, period):
+    # A simple ATR calculation for testing purposes
+    high_low = df['H'] - df['L']
+    high_close = np.abs(df['H'] - df['C'].shift())
+    low_close = np.abs(df['L'] - df['C'].shift())
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = np.max(ranges, axis=1)
+    atr = true_range.rolling(window=period, min_periods=1).mean()
     return atr
 
 
@@ -544,6 +527,12 @@ def calculate_indicators_for_llm_entry_validator(df):
     return df
 
 
+def calculate_indicators_for_nn(df):
+    df = calculate_indicators_for_llm_trader(df)
+    df = calculate_fib_levels_rolling(df)
+    return df
+
+
 def time_ago_string(timestamp_created: datetime) -> str:
     now = datetime.now(timezone.utc)
     time_diff = now - timestamp_created
@@ -566,9 +555,9 @@ def time_ago_string(timestamp_created: datetime) -> str:
 
 
 def find_pivots(df, depth, deviation):
-    """Identifies pivot highs and lows in a DataFrame based on ZigZag methodology."""
-    atr: pd.Series = calculate_atr(df, period=depth)
-    deviation_threshold = atr / df['C'] * (deviation / 100)
+    """Identifies the last pivot highs and lows in a DataFrame."""
+    atr = calculate_atr(df, period=depth)
+    deviation_threshold = atr * (deviation / 100.0)
 
     high_deviation = df['H'] > (df['H'].shift(1) + deviation_threshold)
     low_deviation = df['L'] < (df['L'].shift(1) - deviation_threshold)
@@ -576,42 +565,85 @@ def find_pivots(df, depth, deviation):
     pivot_highs = (df['H'].rolling(window=depth, center=True).max() == df['H']) & high_deviation
     pivot_lows = (df['L'].rolling(window=depth, center=True).min() == df['L']) & low_deviation
 
-    df['pivot'] = np.where(pivot_highs, df['H'], np.where(pivot_lows, df['L'], np.nan))
+    # Finding the last pivot high and low indices
+    last_pivot_high_index = pivot_highs[pivot_highs].last_valid_index()
+    last_pivot_low_index = pivot_lows[pivot_lows].last_valid_index()
 
-    return df.dropna(subset=['pivot'])
+    if last_pivot_high_index is not None and last_pivot_low_index is not None:
+        last_pivot_high = df.loc[last_pivot_high_index, 'H']
+        last_pivot_low = df.loc[last_pivot_low_index, 'L']
+
+        pivot_high = (last_pivot_high, last_pivot_high_index)
+        pivot_low = (last_pivot_low, last_pivot_low_index)
+
+        return pivot_high, pivot_low
+    else:
+        return None
 
 
-def calculate_fib_levels_pivots(df, pivot_col='pivot', depth=20, deviation=2):
-    """Calculate Fibonacci retracement levels from the pivot points."""
-    df = df.copy()
-    df = df[:-1]
-    pivots = find_pivots(df, depth, deviation)
-    last_pivot_high = pivots[pivots[pivot_col] == pivots['H']].last_valid_index()
-    last_pivot_low = pivots[pivots[pivot_col] == pivots['L']].last_valid_index()
+def calculate_fib_levels_pivots(df, depth=20, deviation=2):
+    result = find_pivots(df, depth, deviation)
+    if result:
+        pivot_high, pivot_low = result
+        high_price, high_index = pivot_high
+        low_price, low_index = pivot_low
 
-    if pd.notna(last_pivot_high) and pd.notna(last_pivot_low):
-        pivot_high_price = pivots.at[last_pivot_high, 'H']
-        pivot_low_price = pivots.at[last_pivot_low, 'L']
-
-        # Determine trend
-        if last_pivot_high < last_pivot_low:
-            start_price = pivot_low_price
-            end_price = pivot_high_price
+        # Determine trend to decide start and end price for Fib levels
+        if high_index < low_index:
+            start_price = low_price
+            end_price = high_price
         else:
-            start_price = pivot_high_price
-            end_price = pivot_low_price
+            start_price = high_price
+            end_price = low_price
 
-        # Fibonacci levels calculation
-        levels = [-0.618, -0.382, -0.236, 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
-        fib_levels = {f"fib_{level}": start_price + (end_price - start_price) * level for level in levels}
-        fib_levels['swing_high'] = pivot_high_price
-        fib_levels['swing_low'] = pivot_low_price
-        fib_levels['depth'] = depth
-        fib_levels['deviation'] = deviation
+        levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
+        fib_levels = {f"fib_{abs(level):.3f}": start_price + (end_price - start_price) * level for level in levels}
         return fib_levels
+    return None  # Return None if the pivots could not be determined
 
-    _logger.warning(f"Count not calculate FIB dict")
-    return None
+
+def calculate_fib_levels_rolling(df, pivot_col='pivot', depth=20, deviation=2):
+    """
+    Continuously calculate and update Fibonacci retracement levels in new columns
+    of the DataFrame using a rolling window approach.
+
+    Parameters:
+    - df: DataFrame containing at least the 'pivot' column.
+    - pivot_col: The column to be used to find pivots.
+    - depth: Number of periods for the pivot calculation.
+    - deviation: Multiplier for the pivot deviation.
+    """
+    # Ensure we are working on a copy to prevent SettingWithCopyWarning
+    df = df.copy()
+
+    # Initialize columns for each Fibonacci level
+    levels = [-0.618, -0.382, -0.236, 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
+    for level in levels:
+        df[f'fib_{abs(level):.3f}'.replace('.', '_')] = np.nan
+
+    # Calculate Fibonacci levels for each rolling window of 'depth' length
+    for start_idx in range(len(df) - depth + 1):
+        end_idx = start_idx + depth
+        sub_df = df.iloc[start_idx:end_idx].copy()  # Use .copy() to avoid SettingWithCopyWarning
+        pivots = find_pivots(sub_df, depth, deviation)
+        last_pivot_high = pivots[pivots[pivot_col] == pivots['H']].last_valid_index()
+        last_pivot_low = pivots[pivots[pivot_col] == pivots['L']].last_valid_index()
+
+        if pd.notna(last_pivot_high) and pd.notna(last_pivot_low):
+            pivot_high_price = pivots.at[last_pivot_high, 'H']
+            pivot_low_price = pivots.at[last_pivot_low, 'L']
+
+            # Determine trend
+            start_price, end_price = (pivot_low_price, pivot_high_price) \
+                if last_pivot_high < last_pivot_low else (pivot_high_price, pivot_low_price)
+
+            # Assign Fibonacci levels to the DataFrame
+            for level in levels:
+                fib_level = start_price + (end_price - start_price) * level
+                col_name = f'fib_{abs(level):.3f}'.replace('.', '_')
+                df.loc[end_idx - 1, col_name] = fib_level
+
+    return df
 
 
 def save_total_balance(exchange_id, total_balance, sub_account_id):
