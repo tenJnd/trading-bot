@@ -589,7 +589,7 @@ class LlmTrader:
         # Initialize error messages list
         error_messages = []
 
-        min_rr_ratio = 2
+        min_rr_ratio = 1.5
         rr_ratio = agent_action.rr_ratio(c_price)
         if rr_ratio < min_rr_ratio:
             error_messages.append(
