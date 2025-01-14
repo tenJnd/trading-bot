@@ -80,7 +80,7 @@ BYBIT_CONFIG_PROD = {
         'leverage': LEVERAGE,
         'defaultType': 'swap'
     },
-    'base_currency': 'USDT',
+    'base_currency': 'USDC',
     'sub_accounts': {
         'subAccount1': {
             'apiKey': BYBIT_API_KEY_SUB1,
