@@ -666,6 +666,7 @@ def save_total_balance(exchange_id, total_balance, sub_account_id):
 
 def preprocess_oi(oi_df):
     if oi_df is not None:
+        oi_df = oi_df.copy()
         keep_cols = ['timestamp', 'open_interest']
         oi_df['open_interest'] = round_series(oi_df['openInterestValue'], 0)
         oi_df = oi_df[keep_cols]
