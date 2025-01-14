@@ -30,6 +30,11 @@ def retry_if_network_error(exception):
     return isinstance(exception, (ccxt.NetworkError, ccxt.ExchangeError))
 
 
+def get_since(days):
+    n_days_ago = datetime.now() - timedelta(days=days)
+    return int(n_days_ago.timestamp() * 1000)
+
+
 class BaseExchangeAdapter:
     global_params = {'leverage': LEVERAGE}
 
@@ -56,9 +61,9 @@ class BaseExchangeAdapter:
         self._exchange_config = base_config
         self._exchange = exchange_class(self._exchange_config)
 
-        self._base_currency = self._exchange.base_currency
-        self._market = f"{market}/{self._base_currency}"
-        self.market_futures = f"{self._market}:{self._base_currency}"
+        self.base_currency = self._exchange.base_currency
+        self._market = f"{market}/{self.base_currency}"
+        self.market_futures = f"{self._market}:{self.base_currency}"
 
         self.markets = None
         self._open_positions = None
@@ -105,7 +110,7 @@ class BaseExchangeAdapter:
             self.fetch_balance()
         if self.balance:
             binance_bnfcr = self.balance['free'].get('BNFCR', 0)
-            balance_base = self.balance['free'].get(self._base_currency, 0)
+            balance_base = self.balance['free'].get(self.base_currency, 0)
             free = balance_base + binance_bnfcr
             return free
         return 0
@@ -116,7 +121,7 @@ class BaseExchangeAdapter:
             self.fetch_balance()
         if self.balance:
             binance_bnfcr = self.balance['total'].get('BNFCR', 0)
-            balance_base = self.balance['total'].get(self._base_currency, 0)
+            balance_base = self.balance['total'].get(self.base_currency, 0)
             total = balance_base + binance_bnfcr
             return total
         return 0
@@ -128,8 +133,8 @@ class BaseExchangeAdapter:
     @market.setter
     def market(self, name) -> None:
         _logger.info(f"Setting market to {name}")
-        self._market = f"{name}/{self._base_currency}"
-        self.market_futures = f"{self._market}:{self._base_currency}"
+        self._market = f"{name}/{self.base_currency}"
+        self.market_futures = f"{self._market}:{self.base_currency}"
 
     @property
     def default_trading_type(self):
@@ -179,27 +184,63 @@ class BaseExchangeAdapter:
     @retry(retry_on_exception=retry_if_network_error,
            stop_max_attempt_number=5,
            wait_exponential_multiplier=1500)
-    def get_open_interest_hist(self, timeframe: str = '4h', since: datetime.timestamp = None):
-        try:
-            # Check if the exchange supports the fetch_open_interest method
-            if hasattr(self._exchange, 'fetch_open_interest_history'):
-                # Fetch open interest for the specified market symbol
+    def get_open_interest_hist(self, ticker=None, days=20, timeframe: str = '4h', limit=500):
+        """
+        Fetch open interest history in rolling windows using a while block.
+
+        :param ticker: The market symbol (default: self.market_futures).
+        :param days: Number of days to fetch historical data for.
+        :param timeframe: The timeframe for the data (e.g., '4h').
+        :param limit: The maximum number of records per fetch (default: 500).
+        :return: A DataFrame containing open interest history.
+        """
+        if not ticker:
+            ticker = self.market_futures
+
+        since = get_since(days)
+
+        all_open_interest = []  # Store all fetched open interest data here
+        open_interest_df = pd.DataFrame()
+
+        # Convert buffer_days to the timestamp corresponding to that number of days ago
+        end_time = datetime.now().timestamp() * 1000  # Current timestamp in milliseconds
+
+        # Check if the exchange supports the fetch_open_interest_history method
+        if not hasattr(self._exchange, 'fetch_open_interest_history'):
+            raise ccxt.NotSupported(f"{self._exchange.id} does not support fetching open interest.")
+
+        while since < end_time:
+            try:
+                # Fetch open interest data from the exchange
                 open_interest_data = self._exchange.fetch_open_interest_history(
-                    self.market_futures, timeframe=timeframe, since=since
+                    ticker, timeframe=timeframe, since=since, limit=limit
                 )
-                return open_interest_data
-            else:
-                raise ccxt.NotSupported(f"{self._exchange.id} does not support fetching open interest.")
 
-        except ccxt.NotSupported as e:
-            # Handle the NotSupported error if the method is not supported by the exchange
-            _logger.error(f"Error: open interest not supported: {e}")
-            return None
+                # If no more open interest data is returned, break the loop
+                if not open_interest_data:
+                    break
 
-        except Exception as e:
-            # Handle any other exceptions that may occur
-            _logger.warning(f"An unexpected error occurred: {e}")
-            return None
+                # Append the fetched open interest data to the list
+                all_open_interest.extend(open_interest_data)
+
+                # Update 'since' to the timestamp of the last open interest record to fetch the next batch
+                since = open_interest_data[-1]['timestamp'] + 1  # Increment to avoid overlapping
+
+                # Check if the newly fetched data brings us to the present (end_time)
+                if open_interest_data[-1]['timestamp'] >= end_time:
+                    break
+
+            except Exception as e:
+                # Handle any exceptions that may occur
+                _logger.warning(f"An unexpected error occurred while fetching open interest: {e}")
+                break
+
+        # Convert the list of open interest data to a DataFrame
+        if all_open_interest:
+            open_interest_df = pd.DataFrame(all_open_interest)
+            open_interest_df['datetime'] = pd.to_datetime(open_interest_df['timestamp'], unit='ms')
+
+        return open_interest_df
 
     def get_funding_rate(self):
         try:

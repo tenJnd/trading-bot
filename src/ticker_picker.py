@@ -24,7 +24,9 @@ class LlmTickerPicker(LlmTrader):
         _logger.info("Initiating TickerPicker...")
         super().__init__(exchange=exchange, load_data=False)
         self.strategies = strategies
-        self.tickers_input = [f"{strategy.ticker}/USDT:USDT" for strategy in strategies]
+        self.tickers_input = [(f"{strategy.ticker}/"
+                               f"{exchange.base_currency}:{exchange.base_currency}")
+                              for strategy in strategies]
         self.opened_positions = []
         self.opened_orders = []
 
@@ -179,7 +181,9 @@ class TickerPicker:
         _logger.info("Initiating TickerPicker...")
         self._exchange = exchange
         self.strategies = strategies
-        self.tickers_input = [f"{strategy.ticker}/USDT:USDT" for strategy in strategies]
+        self.tickers_input = [(f"{strategy.ticker}/"
+                               f"{exchange.base_currency}:{exchange.base_currency}")
+                              for strategy in strategies]
         self.open_positions_tickers = []
 
     async def async_get_tickers_data(self):
