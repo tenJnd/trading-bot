@@ -383,6 +383,7 @@ def calculate_closest_fvg_zones(df, current_price, threshold_percentage=2.0):
 
 
 def calculate_regression_channels(df, length=100, source_column='C', upper_dev=2.0, lower_dev=2.0):
+    _logger.info('Calculating regression channel...')
     if len(df) < length:
         raise ValueError("DataFrame is shorter than the specified length for regression calculation.")
 
@@ -527,9 +528,22 @@ def calculate_indicators_for_llm_entry_validator(df):
     return df
 
 
-def calculate_indicators_for_nn(df):
-    df = calculate_indicators_for_llm_trader(df)
-    df = calculate_fib_levels_rolling(df)
+def calculate_indicators_for_nn_30m(df):
+    df['volume_sma_7'] = calculate_sma(df, period=10, column='V')
+    df['volume_sma_14'] = calculate_sma(df, period=20, column='V')
+    df['atr_24'] = calculate_atr(df, period=20)
+    df['sma_7'] = calculate_sma(df, period=10)
+    df['sma_14'] = calculate_sma(df, period=20)
+    df['sma_28'] = calculate_sma(df, period=50)
+    df['sma_48'] = calculate_sma(df, period=100)
+    df['rsi_14'] = calculate_rsi(df, period=14)
+    df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
+    df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+    df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
+        'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
+    df['adx_24'] = calculate_adx(df, n_periods=20)
+    df = calculate_regression_channels(df)
+    df = calculate_fib_levels_rolling(df, depth=100)
     return df
 
 
@@ -602,6 +616,7 @@ def calculate_fib_levels_pivots(df, depth=20, deviation=2):
 
 
 def calculate_fib_levels_rolling(df, depth=20):
+    _logger.info("Calculating fib levels rolling...")
     last_pivot_high = None
     last_pivot_low = None
 
@@ -622,7 +637,7 @@ def calculate_fib_levels_rolling(df, depth=20):
             for level, value in fib_levels.items():
                 df.at[index, level] = value
 
-    return df  # Now the DataFrame is updated directly
+    return df
 
 
 def save_total_balance(exchange_id, total_balance, sub_account_id):
@@ -647,6 +662,19 @@ def save_total_balance(exchange_id, total_balance, sub_account_id):
             )
             session.add(balance_report_obj)
         session.commit()
+
+
+def preprocess_oi(oi_df):
+    if oi_df is not None:
+        keep_cols = ['timestamp', 'open_interest']
+        oi_df['open_interest'] = round_series(oi_df['openInterestValue'], 0)
+        oi_df = oi_df[keep_cols]
+        oi_df['open_interest_sma_20'] = calculate_sma(oi_df, 20, column='open_interest')
+        oi_df['open_interest_sma_10'] = calculate_sma(oi_df, 10, column='open_interest')
+        oi_df.set_index('timestamp', inplace=True)
+        return oi_df
+    else:
+        return None
 
 
 @dataclass

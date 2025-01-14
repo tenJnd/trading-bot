@@ -23,7 +23,7 @@ from src.utils.utils import (calculate_sma, round_series,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
                              calculate_fib_levels_pivots,
                              calculate_closest_fvg_zones,
-                             calculate_regression_channels)
+                             calculate_regression_channels, preprocess_oi)
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=LLM_TRADER_SLACK_URL, username='main')
@@ -250,17 +250,7 @@ class LlmTrader:
     def preprocess_open_interest(self, timeframe=None):
         timeframe = timeframe if timeframe else self.strategy_settings.timeframe
         oi = self._exchange.get_open_interest_hist(timeframe=timeframe)
-        if oi:
-            oi_df = pd.DataFrame(oi)
-            keep_cols = ['timestamp', 'open_interest']
-            oi_df['open_interest'] = round_series(oi_df['openInterestValue'], 0)
-            oi_df = oi_df[keep_cols]
-            oi_df['open_interest_sma_20'] = calculate_sma(oi_df, 20, column='open_interest')
-            oi_df['open_interest_sma_10'] = calculate_sma(oi_df, 10, column='open_interest')
-            oi_df.set_index('timestamp', inplace=True)
-            return oi_df
-        else:
-            return None
+        return preprocess_oi(oi)
 
     def get_current_funding_rate(self):
         fr = self._exchange.get_funding_rate()
