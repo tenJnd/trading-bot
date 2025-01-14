@@ -33,17 +33,8 @@ def include_name(name, type_, parent_names):
     if type_ == "table" and parent_names["schema_name"] is None:
         return f"{name}" in target_metadata.tables
     if type_ == "table":
-        # table restriction
-        schema_name = parent_names["schema_name"] if parent_names["schema_name"] is not None else "public"
-        return (
-                f"""{schema_name}.{name}""" in
-                target_metadata.tables
-        )
-    # elif type_ == "index":
-    #     schema_name = parent_names["schema_name"] if parent_names["schema_name"] is not None else "public"
-    #     print(f"mame index--- {schema_name}.{name}------------------------------------------------------------------")
-    #     name = f"{schema_name}.{name}"
-    #     return True
+        schema_name = parent_names["schema_name"] or "public"
+        return f"{schema_name}.{name}" in target_metadata.tables
     return True
 
 

@@ -148,5 +148,16 @@ class AgentActions(TurtleBase):
     strategy = relationship("StrategySettings", back_populates="agent_actions")
 
 
+class EpisodesTraining(TurtleBase):
+    __tablename__ = 'episodes_training'
+
+    episode_group = Column(String, primary_key=True)
+    balance = Column(Float)
+    total_reward = Column(Float)
+    total_profit = Column(Float)
+    win_trades = Column(Integer)
+    lost_trades = Column(Integer)
+
+
 if __name__ == '__main__':
     trader_database.init_schema(Base.metadata)
