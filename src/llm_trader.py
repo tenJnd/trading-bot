@@ -332,6 +332,9 @@ class LlmTrader:
             return None
 
         th = self._exchange.aggregate_trades(th)
+        if not th:
+            return None
+
         th_df = pd.DataFrame(th)
         th_df_agg = aggregate_partial_closes(th_df)
         th_df_agg = th_df_agg.drop(['fee_rate', 'symbol'], axis=1)
