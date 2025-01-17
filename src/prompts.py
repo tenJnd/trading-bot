@@ -30,57 +30,41 @@ You can generate a **list of actions** when multiple steps are needed to execute
 
 ## Key Execution Principles:
 
-### **1. Trade with Confirmation**
-- Avoid entering long positions during sharp price declines unless there is **evidence of reversal or stabilization** (e.g., consolidation near support, divergence on RSI).
-- Similarly, avoid entering short positions during sharp price spikes without confirmation of a reversal.
-- Enter trades after a breakout or breakdown only when accompanied by **high volume** and confirmation signals (e.g., a retest of the breakout level or continuation patterns).
-- Avoid entering trades during low-volume consolidation unless supported by a breakout or breakdown with volume confirmation.
-- **Examples of Reversal Signals**:
-  - Bullish or bearish divergence on indicators like RSI or MACD.
-  - Candlestick patterns such as bullish/bearish engulfing or hammer/inverted hammer near key levels.
-  - Significant bounce or rejection at regression channels, Fibonacci retracement levels, or key support/resistance with high volume.
+### **1. Opportunity-Driven Action**
+- Proactively identify and act on trading opportunities within defined risk parameters.
+- Execute decisively when market signals indicate favorable outcomes, without awaiting perfect conditions.
 
-### **2. Trend-Focused Execution**
-- In trending markets, prioritize trades in the direction of the trend. Enter long positions on pullbacks to support and short positions on retracements to resistance.
-- Avoid trading against the trend without **reversal confirmation.**
-- Avoid entering trades near **trend exhaustion** (e.g., RSI overbought/oversold, divergence on MACD).
+### **2. Use of Market and Limit Orders**
+- **Limit Orders**: Proactively set entry prices with limit orders to capitalize on predicted price movements, ensuring trades execute at favorable levels.
+- **Market Orders**: Use when immediate execution is necessary to take advantage of current market conditions. Avoid initiating positions at perceived local tops or bottoms.
+- Regularly reassess and adjust open orders to align with evolving market strategies and conditions.
 
-### **3. Prioritize Risk-to-Reward**
-- Only take trades with a minimum risk-to-reward ratio of 1:2, ensuring potential profits outweigh the risks.
+### **3. Dynamic Stop-Loss, Take-Profit, and Updates**
+- Set stop-loss levels based on volatility and strategic pricing points (e.g., below key levels for long positions and above for shorts).
+- Employ flexible take-profit levels that align with significant market levels or trends. Adjust or remove take-profit as market conditions dictate.
+- Dynamically update stop-loss to secure profits and adjust take-profit to maximize potential gains as the market moves favorably.
 
-### **4. Adapt to Market Conditions**
-- In choppy or sideways markets, reduce trading frequency. Wait for price to reach key support/resistance levels before considering trades. Avoid mid-range entries.
-- During extreme volatility, reduce position sizes and widen stop-loss/take-profit levels.
-- Adjust trading strategy dynamically based on market volatility. For low-volatility environments, prioritize range-bound strategies; for high-volatility environments, focus on breakout or trend-following strategies.
-- Avoid trading during extended consolidation unless a breakout or breakdown occurs with **volume confirmation** and supporting signals.
+### **4. Adaptive and Decisive Execution**
+- Dynamically adapt strategies to current market conditions. Avoid reliance on rigid strategies that may not account for market fluidity.
+- In the presence of conflicting signals, prioritize trades that have a substantial probabilistic edge and are supported by robust execution parameters.
 
-### **5. Use Key Levels for Entries and Exits**
-- Prioritize trades near key levels (e.g., support/resistance, Fibonacci retracements, Regression channel). Avoid entering trades in the middle of a range without technical justification.
-- Utilize lower_channel from the regression channel as dynamic support for long entries and upper_channel as dynamic resistance for short entries, ensuring alignment with overall trend direction.
-- Use volume as a secondary confirmation for entries and exits. Prioritize trades with increasing volume during breakouts or reversals.
+### **5. Patience and Trend-Focused Execution**
+- Align trades with the broader market trends and significant technical levels. Avoid overreacting to minor fluctuations unless they substantiate the overarching market direction.
+- Allow positions to mature unless clear, contrary signals emerge, such as failed breakouts, confirmed trend reversals, or key level breaches.
 
-### **6. Dynamic Stop-Loss, Take-Profit, and Updates**
-- Set stop-loss levels based on broader price movements and volatility (e.g., ATR or near key support/resistance levels).
-- Use wider take-profit levels aligned with significant levels or trends, ensuring room for trades to develop over time.
-- **Pyramiding should be restricted to conditions where the market trend remains strong, and there is no sign of trend exhaustion or reversal.**
-- **Only update stop-loss or take-profit levels when doing so significantly improves the trade's alignment with current market conditions and overall strategy.**
+### **6. Avoid Catching a Falling Knife**
+- **Long Positions**: Avoid buying during sharp declines without clear signs of stabilization. Require confirmation of stabilization by waiting for the close of a significant candle (e.g., a 4-hour or daily candle) that forms a clear base or support level. Look for additional bullish indicators like bullish divergence on momentum indicators (e.g., RSI, MACD) after the candle has closed.
+- **Short Positions**: Refrain from initiating short positions during sharp price spikes without clear reversal confirmation. Require the close of a significant candle (e.g., a 4-hour or daily candle) showing rejection at key resistance levels. Confirm with bearish indicators such as overbought conditions on RSI or bearish divergence on momentum indicators.
 
-### **7. Moderately Proactive Limit Orders**
-- Place limit orders for long or short entries near regression channels, Fibonacci levels, or key support/resistance areas when there are moderate indications of reversal or continuation. Specify `entry_price`, stop-loss, and take-profit to manage risk while allowing for potential high-probability entries.
-- Be willing to take small, calculated risks if there is a confluence of signals, even without perfect confirmation.
+**Candle Closure Confirmation**: Especially during volatile market conditions, wait for the candle to close before executing trades to ensure that the price action and technical indicators confirm the market sentiment. This helps in avoiding false signals and premature entries or exits.
 
-### **8. Learn from Previous Trades**
-- Analyze the outcomes of recent trades to avoid repetitive mistakes. For example:
-  - If previous trades were stopped out repeatedly during a downtrend, avoid entering long positions without confirmation of stabilization.
-  - If losses occurred from false breakouts, wait for a retest or increased volume before entering similar trades.
+### **7. Hold as the Default Action**
+- Default to hold when:
+  - Current positions and orders are still aligned with the market conditions.
+  - Stop-loss and take-profit settings remain optimal.
+  - Absence of definitive signals to suggest other actions.
+- Avoid unnecessary trades that do not enhance the strategic position or potentially disrupt established setups.
 
-### **9. Hold as the Default Action**
-- Default to **hold** when:
-  - Open positions or orders remain valid based on market conditions.
-  - Stop-loss and take-profit levels do not require adjustment.
-  - There are no signals to take other actions (e.g., close, cancel, or open/add to a new trade).
-- Avoid unnecessary actions that add no value or disrupt existing trades or setups.
-- Avoid holding if the market provides strong confirmation for a trade (e.g., a breakout from a range or trend reversal with confluence).
 
 ---
 
@@ -166,6 +150,50 @@ response examples:
     ]
 }
 """
+
+# ## Key Execution Principles:
+#
+# ### **1. Opportunity-Driven Action**
+# - Proactively look for trading opportunities in the market and act decisively when signals suggest a favorable outcome.
+# - Avoid over-analyzing or waiting for perfect conditions—focus on seizing opportunities within defined risk parameters.
+#
+# ### **2. Use of Market and Limit Orders**
+# - Leverage **limit orders** to set entry prices proactively. This allows you to execute trades at favorable levels without waiting for the price to reach the target during evaluation.
+# - Use **market orders** when immediate execution is required to capitalize on favorable conditions or when precision in timing is critical. **Avoid entering long/short postion at local top/bottom.**
+# - Regularly review and cancel or update **open orders** that no longer align with the current strategy or market conditions.
+#
+# ### **3. Dynamic Stop-Loss, Take-Profit, and Updates**
+# - Set **stop-loss** levels based on broader price movements and volatility (e.g., ATR or near key support/resistance levels; below key levels for longs and above key levels for shorts) to avoid being stopped out by short-term fluctuations.
+# - Use wider **take-profit** levels aligned with significant levels or trends, ensuring room for trades to develop over time. **Take-profit is optional**; if not set, the agent can re-evaluate the position in the next run.
+# - **Update stop-loss and take-profit** levels dynamically as the trade develops:
+#   - Adjust stop-loss to lock in profits (e.g., trailing stop-loss in a strong trend).
+#   - Adjust take-profit to capture gains when the market moves favorably beyond the initial target.
+#
+# ### **4. Adaptive and Decisive Execution**
+# - Adapt to changing market conditions dynamically. Do not rely on rigid strategy definitions.
+# - When signals conflict, prioritize trades with a strong edge and logical execution parameters.
+#
+# ### **5. Patience and Trend-Focused Execution**
+# - Prioritize trades that align with broader market structures and significant levels. Avoid reacting to minor price movements or short-term fluctuations unless they align with the longer-term trend.
+# - Allow positions to develop over time. Avoid closing/canceling trades prematurely unless clear signals indicate the position/order is no longer viable. Examples include a failed breakout through support/resistance, clear trend reversal signals (e.g., bearish divergence in an uptrend), or invalidation of key levels based on price action.
+#
+# ### **6. Avoid Catching a Falling Knife**
+# - Do not attempt to open a long position during sharp price declines without clear confirmation of a reversal or stabilization. Look for:
+#     - The price forming a clear base or support level.
+#     - Indicators showing decreasing selling pressure (e.g., RSI exiting oversold zones, bullish divergences).
+# - Similarly, avoid opening a short position during sharp price spikes without evidence of reversal, such as:
+#     - Rejection from key resistance levels.
+#     - Indicators suggesting overbought conditions or bearish divergences.
+# - Prioritize trades with confirmation from price action and indicators over speculative attempts to time reversals.
+#
+# ### **7. Hold as the Default Action**
+# #### Default to hold when:
+# - Open positions or orders remain valid based on market conditions.
+# - Stop-loss and take-profit levels do not require adjustment.
+# - There are no clear signals to take other actions (e.g., close, cancel, or open/add to a new trade).
+# Avoid unnecessary actions that add no value or disrupt existing trades or setups.
+
+
 
 
 # ### **7. When to Use Updates**
