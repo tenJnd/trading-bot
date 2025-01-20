@@ -609,7 +609,7 @@ def calculate_fib_levels_pivots(df, depth=20, deviation=2):
             start_price = high_price
             end_price = low_price
 
-        levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
+        levels = [-0.618, -0.236, 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618]
         fib_levels = {f"fib_{abs(level):.3f}": start_price + (end_price - start_price) * level for level in levels}
         return fib_levels
     return None  # Return None if the pivots could not be determined
@@ -631,7 +631,7 @@ def calculate_fib_levels_rolling(df, depth=20):
 
         if index >= depth + 1 and last_pivot_high and last_pivot_low:
             sub_df = df.loc[:index]
-            fib_levels = calculate_fib_levels_pivots(sub_df)
+            fib_levels = calculate_fib_levels_pivots(sub_df)  # TODO: from 0-1.618, (-) not included in reinforce
             if not fib_levels:
                 continue
             for level, value in fib_levels.items():

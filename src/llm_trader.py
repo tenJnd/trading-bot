@@ -366,19 +366,17 @@ class LlmTrader:
 
             df.set_index('timeframe', inplace=True)
             df = self._calculate_indicators_for_llm_trader(df)
-            df = calculate_regression_channels(df, length=50)
+            df = calculate_regression_channels(df, length=100)
 
             # df = shorten_large_numbers(df, 'obv')
             # df = shorten_large_numbers(df, 'obv_sma_20')
 
             if timeframe != base_timeframe:
-                fib_depth = 10
                 tail = int(self.df_tail_for_agent / 2)
             else:
                 tail = self.df_tail_for_agent
-                fib_depth = 20
 
-            fib_dict = calculate_fib_levels_pivots(df, depth=fib_depth)
+            fib_dict = calculate_fib_levels_pivots(df, depth=20, deviation=3)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
             fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
 
