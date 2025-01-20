@@ -50,10 +50,7 @@ class BaseExchangeAdapter:
             sub_account_config = base_config.get('sub_accounts', {}).get(sub_account_id)
             if not sub_account_config:
                 raise ValueError(f"Sub-account '{sub_account_id}' not found for exchange '{exchange_id}'")
-            # Explicitly update only the API credentials
-            base_config['apiKey'] = sub_account_config['apiKey']
-            base_config['secret'] = sub_account_config['secret']
-            base_config['options']['leverage'] = sub_account_config['leverage']
+            base_config.update(sub_account_config)
 
         # Remove sub-accounts key to avoid passing it to the exchange object
         base_config.pop('sub_accounts', None)

@@ -34,7 +34,7 @@ BINANCE_CONFIG_TEST = {
         'defaultType': 'future',
         'leverage': LEVERAGE
     },
-    'base_currency': 'USDC',
+    'base_currency': 'USDT',
 }
 
 BINANCE_CONFIG_PROD = {
@@ -45,7 +45,7 @@ BINANCE_CONFIG_PROD = {
         'defaultType': 'future',
         'leverage': LEVERAGE
     },
-    'base_currency': 'USDC',
+    'base_currency': 'USDT',
 }
 
 KUCOIN_CONFIG_PROD = {
@@ -80,12 +80,16 @@ BYBIT_CONFIG_PROD = {
         'leverage': LEVERAGE,
         'defaultType': 'swap'
     },
-    'base_currency': 'USDC',
+    'base_currency': 'USDT',
     'sub_accounts': {
         'subAccount1': {
             'apiKey': BYBIT_API_KEY_SUB1,
             'secret': BYBIT_API_SECRET_SUB1,
-            'leverage': 2
+            'base_currency': 'USDT',
+            'options': {
+                'leverage': 2,
+                'defaultType': 'swap'
+            }
         }
     }
 }
