@@ -420,19 +420,15 @@ You must perform the following actions:
 - Review **volatility**: ATR values for trading potential.  
 - Assess volume trends using OBV and VOL_SMA.
 
-2. **Incorporate Fibonacci Levels**  
-- Identify tickers where price aligns with key **Fibonacci levels**.  
-- Validate support and resistance zones using swing high/low levels.
+2. **Find support and resistance**  
+- Validate support and resistance zones using swing high/low levels, fibonacci and regression channel.
 
 3. **Rank Tickers**:
 - Assign a **score (1–100)** based on trading potential:  
    - **Trend-following** opportunities prioritize strong directional trends.  
    - **Swing trading** setups prioritize pullbacks or reversals near Fibonacci levels.  
 
-4. **Filter Tickers**:
-   - Eliminate **weak tickers**: Low volatility, weak trends, or over-correlated tickers.
-
-5. **Provide Explanations**:
+4. **Provide Explanations**:
    - Brief summary - Include specific metrics, indicator values, and Fibonacci alignments in the rationale for the two to three best tickers.  
 
 ---
