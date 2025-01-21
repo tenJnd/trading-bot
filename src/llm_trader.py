@@ -376,9 +376,9 @@ class LlmTrader:
             else:
                 tail = self.df_tail_for_agent
 
-            fib_dict = calculate_fib_levels_pivots(df, depth=20, deviation=3)
+            fib_dict = calculate_fib_levels_pivots(df, depth=40, deviation=3)
             # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
-            fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
+            # fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
 
             merged_df = df.copy()
             if oi is not None:
@@ -394,7 +394,7 @@ class LlmTrader:
                 'timing_info': timing_data,
                 'price_and_indicators': price_data_csv,
                 'fib_levels': fib_dict,
-                'closest_fair_value_gaps_levels': fvg_dict,
+                # 'closest_fair_value_gaps_levels': fvg_dict,
             }
         return result_data
 

@@ -73,7 +73,7 @@ class LlmTickerPicker(LlmTrader):
 
         for tic in tickers_data[0]:
             tic = calculate_indicators_for_llm_trader(tic)
-            tic_fib = calculate_fib_levels_pivots(tic)
+            tic_fib = calculate_fib_levels_pivots(tic, depth=40)
 
             tic_last = tic.iloc[-1]
             if not tic_fib:
