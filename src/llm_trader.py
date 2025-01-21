@@ -86,10 +86,10 @@ class TraderModel(model_config.ModelConfig):
     MODEL = 'gpt-4o'
     MAX_TOKENS = 2000
     CONTEXT_WINDOW = 8192
-    TEMPERATURE = 0.4  # Keep outputs deterministic for scoring and ranking
+    TEMPERATURE = 0.2  # Keep outputs deterministic for scoring and ranking
     RESPONSE_TOKENS = 500  # Ensure response fits within limits
-    FREQUENCY_PENALTY = 0.0  # Avoid repetition in rationale
-    PRESENCE_PENALTY = 0.3  # Encourage new ideas or highlighting unique patterns
+    FREQUENCY_PENALTY = 0.1  # Avoid repetition in rationale
+    PRESENCE_PENALTY = 0  # Encourage new ideas or highlighting unique patterns
 
 
 class ConditionVerificationError(Exception):
@@ -161,7 +161,7 @@ class LlmTrader:
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
-    df_tail_for_agent = 30
+    df_tail_for_agent = 20
     leverage = 2
     margin = 0.1
     risk_per_trade = 0.01  # 1% risk per trade * leverage!! -> 2%

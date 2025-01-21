@@ -9,7 +9,7 @@ from config import SLACK_URL, LLM_TRADER_SLACK_URL
 from src.llm_trader import LlmTrader
 from src.prompts import ticker_picker_prompt
 from src.utils.utils import StrategySettingsModel, calculate_indicators_for_llm_trader, \
-    turtle_trading_signals_adjusted, calculate_fib_levels_pivots
+    turtle_trading_signals_adjusted, calculate_fib_levels_pivots, calculate_regression_channels
 
 _logger = logging.getLogger(__name__)
 _notifier = SlackNotifier(url=SLACK_URL, username='turtle_trader')
@@ -73,6 +73,7 @@ class LlmTickerPicker(LlmTrader):
 
         for tic in tickers_data[0]:
             tic = calculate_indicators_for_llm_trader(tic)
+            tic = calculate_regression_channels(tic, length=100)
             tic_fib = calculate_fib_levels_pivots(tic, depth=40)
 
             tic_last = tic.iloc[-1]
@@ -86,7 +87,7 @@ class LlmTickerPicker(LlmTrader):
             close_price = tic_last.C
 
             tic_fib['ticker'] = ticker_symbol
-            tic_fib['C'] = close_price
+            tic_fib['Current_price'] = close_price
             fib_list.append(tic_fib)
 
         all_df = pd.DataFrame(ticker_list)
@@ -146,7 +147,7 @@ class LlmTickerPicker(LlmTrader):
             agent_action.action = 'ticker_pick'
 
             # Extract ticker and score from the list of dictionaries and filter them based on score > 85
-            high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 80]
+            high_score_tickers = [ticker for ticker in agent_action.data if ticker['score'] > 85]
 
             msg = (f"Ticker picker selection based on high score: {high_score_tickers}\n"
                    f"rationale: {agent_action.rationale}")
