@@ -77,7 +77,9 @@ def trade(exchange_id):
             _logger.info("No entry conditions met...")
             return
 
-        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id)
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
+            exchange_id, sub_account_id=strategy_settings[0].sub_account_id
+        )
         _logger.info(f"Initialising Turtle trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
         exchange_adapter.load_exchange()
 
@@ -151,6 +153,18 @@ def llm_trade(exchange_id, tickers):
 def back_test(exchange_id):
     _logger.info("\n============== BACKTEST ==============\n")
     turtle_back_test(exchange_id)
+
+@cli.command(help='run LLM trading bot')
+@click.option('-exch', '--exchange_id', type=str, default='binance')
+def test_balance(exchange_id):
+    # Llm Trader for each picked ticker
+    exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
+        exchange_id, 'subAccount1'
+    )
+    exchange_adapter.load_exchange()
+    exchange_adapter.market = 'BTC'
+    balance = exchange_adapter.free_balance
+    print(balance)
 
 
 if __name__ == '__main__':
