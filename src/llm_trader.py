@@ -275,21 +275,21 @@ class LlmTrader:
             return {
                 'timestamp': op.get('timestamp', None),
                 'datetime': op.get('datetime', None),
-                'initialMargin': op.get('initialMargin', None),
-                'initialMarginPercentage': op.get('initialMarginPercentage', None),
-                'maintenanceMargin': op.get('maintenanceMargin', None),
-                'maintenanceMarginPercentage': op.get('maintenanceMarginPercentage', None),
+                # 'initialMargin': op.get('initialMargin', None),
+                # 'initialMarginPercentage': op.get('initialMarginPercentage', None),
+                # 'maintenanceMargin': op.get('maintenanceMargin', None),
+                # 'maintenanceMarginPercentage': op.get('maintenanceMarginPercentage', None),
                 'entryPrice': op.get('entryPrice', None),
-                'notional': op.get('notional', None),
+                # 'notional': op.get('notional', None),
                 'leverage': op.get('leverage', None),
                 'unrealizedPnl': op.get('unrealizedPnl', None),
                 'contracts': op.get('contracts', None),
                 'contractSize': op.get('contractSize', None),
-                'marginRatio': op.get('marginRatio', None),
-                'liquidationPrice': op.get('liquidationPrice', None),
+                # 'marginRatio': op.get('marginRatio', None),
+                # 'liquidationPrice': op.get('liquidationPrice', None),
                 'markPrice': op.get('markPrice', None),
-                'collateral': op.get('collateral', None),
-                'marginMode': op.get('marginMode', None),
+                # 'collateral': op.get('collateral', None),
+                # 'marginMode': op.get('marginMode', None),
                 'side': op.get('side', None),
                 'percentage': op.get('percentage', None),
                 'stopLossPrice': op.get('stopLossPrice', None),
@@ -580,7 +580,7 @@ class LlmTrader:
         # Initialize error messages list
         error_messages = []
 
-        min_rr_ratio = 1.5
+        min_rr_ratio = 0.5
         rr_ratio = agent_action.rr_ratio(c_price)
         if rr_ratio < min_rr_ratio:
             error_messages.append(
