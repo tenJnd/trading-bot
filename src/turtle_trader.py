@@ -97,6 +97,8 @@ class TurtleTrader:
                  exchange: BaseExchangeAdapter,
                  strategy_settings: StrategySettings = None,
                  db: PostgresqlAdapter = None,
+                 use_llm_entry_validator=False,
+                 use_llm_pyramid_validator=False,
                  testing_file_path: bool = False,
                  ):
         self.strategy_settings = strategy_settings
@@ -108,6 +110,8 @@ class TurtleTrader:
         self.curr_market_conditions: CurrMarketConditions = None
         self.last_closed_timeframe = None
         self.llm_validator = None
+        self.use_llm_entry_validator = use_llm_entry_validator
+        self.use_llm_pyramid_validator = use_llm_pyramid_validator
         self.minimal_entry_cost = MIN_POSITION_THRESHOLD
 
         self.get_opened_positions()
@@ -574,7 +578,10 @@ class TurtleTrader:
             # add to position -> pyramiding
             elif curr_mar_cond.C >= long_pyramid_price and not pyramid_stop:
                 _logger.info(f'Adding to long position -> check w LLM validator')
-                self.entry_w_validation('long')
+                if self.use_llm_pyramid_validator:
+                    self.entry_w_validation('long')
+                else:
+                    self.entry_position('long')
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
@@ -590,7 +597,10 @@ class TurtleTrader:
             # add to position -> pyramiding
             elif curr_mar_cond.C <= short_pyramid_price and not pyramid_stop:
                 _logger.info(f'Adding to short position -> check w LLM validator')
-                self.entry_w_validation('short')
+                if self.use_llm_pyramid_validator:
+                    self.entry_w_validation('short')
+                else:
+                    self.entry_position('short')
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
@@ -601,11 +611,17 @@ class TurtleTrader:
         # entry long
         if curr_cond.long_entry and not curr_cond.long_exit:  # safety
             _logger.info('Long cond is met -> entering long position')
-            self.entry_w_validation('long')
+            if self.use_llm_entry_validator:
+                self.entry_w_validation('long')
+            else:
+                self.entry_position('long')
         # entry short
         elif curr_cond.short_entry and not curr_cond.short_exit:  # safety
             _logger.info('Short cond is met -> entering short position')
-            self.entry_w_validation('short')
+            if self.use_llm_entry_validator:
+                self.entry_w_validation('short')
+            else:
+                self.entry_position('short')
         # do nothing
         else:
             _logger.info('No opened positions and no condition is met for entry -> SKIPPING')
