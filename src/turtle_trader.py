@@ -278,7 +278,10 @@ class TurtleTrader:
         else:
             return self.last_opened_position.agg_trade_id
 
-    def get_stop_loss_price(self, action, atr):
+    def get_stop_loss_price(self, action, atr=None):
+        if not atr:
+            atr = self.curr_market_conditions.atr_20
+
         atr2 = self.strategy_settings.stop_loss_atr_multipl * atr * self.curr_market_conditions.atr_period_ratio
         if action == 'long':  # long
             return self.curr_market_conditions.C - atr2
@@ -505,21 +508,23 @@ class TurtleTrader:
                    f"Lmm validator is adding to position\n"
                    f"rationale: {agent_action.rationale}")
             self.entry_position(side)
-        elif agent_action.action == 'enter_position':
-            msg = (self.get_ticker_exchange_string('lmm enter position') +
-                   f"Lmm validator is entering the position\n"
-                   f"rationale: {agent_action.rationale}")
-            self.entry_position(side)
+        # elif agent_action.action == 'enter_position':
+        #     msg = (self.get_ticker_exchange_string('lmm enter position') +
+        #            f"Lmm validator is entering the position\n"
+        #            f"rationale: {agent_action.rationale}")
+        #     self.entry_position(side)
         elif agent_action.action == 'set_stop_loss':
             stop_loss = agent_action.stop_loss
-            if stop_loss:
-                msg = (self.get_ticker_exchange_string('llm stop-loss') +
-                       "Llm validator is setting new stop-loss\n"
-                       f"curr price: {self.curr_market_conditions.C}, "
-                       f"atr_20: {self.curr_market_conditions.atr_20}\n"
-                       f"stop-loss: {agent_action.stop_loss}\n"
-                       f"rationale: {agent_action.rationale}")
-                self.update_stop_loss(stop_loss)
+            # if stop_loss:
+            stop_loss_price_atr = self.get_stop_loss_price(side)
+            self.update_stop_loss(stop_loss_price_atr)
+            msg = (self.get_ticker_exchange_string('llm stop-loss') +
+                   "Llm validator is setting new stop-loss\n"
+                   f"curr price: {self.curr_market_conditions.C}, "
+                   f"atr_20: {self.curr_market_conditions.atr_20}\n"
+                   f"stop-loss atr: {stop_loss_price_atr}\n"
+                   f"stop-loss agent: {stop_loss}\n"
+                   f"rationale: {agent_action.rationale}")
         else:
             msg = (self.get_ticker_exchange_string('llm hold') +
                    "LMM validator action is to wait. "

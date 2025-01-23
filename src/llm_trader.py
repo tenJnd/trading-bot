@@ -18,11 +18,9 @@ from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_M
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
-from src.utils.utils import (calculate_sma, round_series,
-                             dynamic_safe_round, calculate_indicators_for_llm_trader,
+from src.utils.utils import (dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
                              calculate_fib_levels_pivots,
-                             calculate_closest_fvg_zones,
                              calculate_regression_channels, preprocess_oi)
 
 _logger = logging.getLogger(__name__)
@@ -345,6 +343,39 @@ class LlmTrader:
     def _calculate_indicators_for_llm_trader(df):
         return calculate_indicators_for_llm_trader(df)
 
+    def calculate_price_data_one_timeframe(self, buffer_days, timeframe):
+        oi = self.preprocess_open_interest(timeframe=timeframe)
+        df = self.get_ohcl_data(buffer_days=buffer_days, timeframe=timeframe)
+
+        self.last_close_price = df.iloc[-1]['C']
+        last_candle_timestamp = df.iloc[-1]['timeframe']
+
+        if timeframe == self.strategy_settings.timeframe:
+            self.last_candle_timestamp = df.iloc[-1]['timeframe']
+
+        df.set_index('timeframe', inplace=True)
+        df = self._calculate_indicators_for_llm_trader(df)
+        df = calculate_regression_channels(df, length=100)
+
+        fib_dict = calculate_fib_levels_pivots(df, depth=40, deviation=3)
+
+        merged_df = df.copy()
+        if oi is not None:
+            merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
+
+        # merged_df = merged_df.drop(['datetime'], axis=1)
+        df_tail = merged_df.tail(self.df_tail_for_agent)
+        price_data_csv = df_tail.to_csv()
+
+        timing_data = self.get_timing_info(timeframe, last_candle_timestamp)
+
+        return {
+            'timing_info': timing_data,
+            'price_and_indicators': price_data_csv,
+            'fib_levels': fib_dict,
+            # 'closest_fair_value_gaps_levels': fvg_dict,
+        }
+
     def calculate_data_multiple_periods(self):
         base_timeframe = self.strategy_settings.timeframe
         higher_timeframe = get_next_key(base_timeframe)
@@ -355,47 +386,8 @@ class LlmTrader:
 
         for timeframe in timeframes:
             buffer_days = PERIODS.get(timeframe)
-            oi = self.preprocess_open_interest(timeframe=timeframe)
-            df = self.get_ohcl_data(buffer_days=buffer_days, timeframe=timeframe)
-
-            self.last_close_price = df.iloc[-1]['C']
-            last_candle_timestamp = df.iloc[-1]['timeframe']
-
-            if timeframe == self.strategy_settings.timeframe:
-                self.last_candle_timestamp = df.iloc[-1]['timeframe']
-
-            df.set_index('timeframe', inplace=True)
-            df = self._calculate_indicators_for_llm_trader(df)
-            df = calculate_regression_channels(df, length=100)
-
-            # df = shorten_large_numbers(df, 'obv')
-            # df = shorten_large_numbers(df, 'obv_sma_20')
-
-            if timeframe != base_timeframe:
-                tail = int(self.df_tail_for_agent / 2)
-            else:
-                tail = self.df_tail_for_agent
-
-            fib_dict = calculate_fib_levels_pivots(df, depth=40, deviation=3)
-            # pp_dict = calculate_pivot_points(df, lookback_periods=[20])
-            # fvg_dict = calculate_closest_fvg_zones(df, self.last_close_price)
-
-            merged_df = df.copy()
-            if oi is not None:
-                merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
-
-            # merged_df = merged_df.drop(['datetime'], axis=1)
-            df_tail = merged_df.tail(tail)
-            price_data_csv = df_tail.to_csv()
-
-            timing_data = self.get_timing_info(timeframe, last_candle_timestamp)
-
-            result_data[timeframe] = {
-                'timing_info': timing_data,
-                'price_and_indicators': price_data_csv,
-                'fib_levels': fib_dict,
-                # 'closest_fair_value_gaps_levels': fvg_dict,
-            }
+            result = self.calculate_price_data_one_timeframe(buffer_days, timeframe)
+            result_data[timeframe] = result
         return result_data
 
     def get_price_action_data(self):
@@ -796,6 +788,18 @@ class LlmTurtlePyramidValidator(LlmTrader):
             diff = now - last_call
             repeated_call_time_test = diff > timedelta(minutes=VALIDATOR_REPEATED_CALL_TIME_TEST_MIN)
         return repeated_call_time_test
+
+    def get_price_action_data(self):
+        fr = self.get_current_funding_rate()
+        data_one_period = self.calculate_price_data_one_timeframe(
+            self.strategy_settings.buffer_days, self.strategy_settings.timeframe
+        )
+        price_data_dict = {
+            'current_price': self.last_close_price,
+            'price_data': data_one_period,
+            'current_funding_rate': fr
+        }
+        return price_data_dict
 
     def create_llm_input_dict(self):
         return {
