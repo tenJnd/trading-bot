@@ -87,7 +87,7 @@ BYBIT_CONFIG_PROD = {
             'secret': BYBIT_API_SECRET_SUB1,
             'base_currency': 'USDT',
             'options': {
-                'leverage': 2,
+                'leverage': LEVERAGE,
                 'defaultType': 'swap'
             }
         }
