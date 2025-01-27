@@ -418,6 +418,8 @@ class TurtleTrader:
                                      self.curr_market_conditions.atr_period_ratio
                              )
                      ) / self._exchange.contract_size
+        raw_amount_max = free_balance / self.curr_market_conditions.C
+        raw_amount = min(raw_amount_max, raw_amount)
 
         _logger.debug(f"Raw calculated amount: {raw_amount}")
 
