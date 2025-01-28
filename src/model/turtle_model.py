@@ -88,6 +88,8 @@ class StrategySettings(TurtleBase):
     active = Column(Boolean, default=False)
     agent_id = Column(String)
     sub_account_id = Column(String)
+    manual_side = Column(String)
+    manual_standby_mode = Column(Boolean)
 
     # Relationship to Order
     orders = relationship("Order", back_populates="strategy")
@@ -154,9 +156,11 @@ class EpisodesTraining(TurtleBase):
     episode_group = Column(String, primary_key=True)
     balance = Column(Float)
     total_reward = Column(Float)
-    total_profit = Column(Float)
+    profit_closed_trades = Column(Float)
     win_trades = Column(Integer)
     lost_trades = Column(Integer)
+    timestamp_created = Column(UtcDateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    model_suffix = Column(String)
 
 
 if __name__ == '__main__':

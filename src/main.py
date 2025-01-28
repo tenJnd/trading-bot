@@ -11,8 +11,9 @@ from exchange_adapter import BaseExchangeAdapter
 from src.exchange_factory import ExchangeFactory
 from src.llm_trader import LlmTrader
 from src.ticker_picker import LlmTickerPicker, TickerPicker
+from src.turtle_trader import ShitTrader
 from src.utils.turtle_back_test import turtle_back_test
-from src.utils.utils import load_strategy_settings, save_total_balance
+from src.utils.utils import load_strategy_settings, save_total_balance, process_new_shit_trader_strategy
 from turtle_trader import TurtleTrader
 
 _logger = logging.getLogger(__name__)
@@ -37,10 +38,15 @@ def log_pl(exchange_id):
 
 
 @cli.command(help='close position manually')
-@click.option('-exch', '--exchange', type=str, default='binance')
+@click.option('-exch', '--exchange', type=str, default='bybit')
 @click.option('-si', '--strategy_id', type=int)
 def close_position(exchange, strategy_id):
     _logger.info(f"\n============== CLOSING POSITION {strategy_id} ==============\n")
+    agent_map = {
+        'turtle_trader': TurtleTrader,
+        'shit_trader': ShitTrader
+    }
+
     try:
         strategy_settings = load_strategy_settings(exchange)
         if not strategy_settings:
@@ -50,8 +56,9 @@ def close_position(exchange, strategy_id):
         exchange.load_exchange()
         for strategy in strategy_settings:
             if strategy.id == strategy_id:
+                trader_obj = agent_map.get(strategy.agent_id)
                 exchange.market = f"{strategy.ticker}"
-                trader = TurtleTrader(exchange, strategy)
+                trader = trader_obj(exchange, strategy)
                 trader.close_position()
     except Exception as e:
         _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
@@ -80,13 +87,53 @@ def trade(exchange_id):
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
             exchange_id, sub_account_id=strategy_settings[0].sub_account_id
         )
-        _logger.info(f"Initialising Turtle trader on {exchange_id}, tickers: {[x.ticker for x in strategy_settings]}")
+        _logger.info(f"Initialising Turtle trader on {exchange_id}, "
+                     f"tickers: {[x.ticker for x in strategy_settings]}")
         exchange_adapter.load_exchange()
 
         for strategy in strategy_settings_filtered:
-            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, strategy_id: {strategy.id}-----------")
+            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
+                         f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
             trader = TurtleTrader(exchange_adapter, strategy)
+            _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
+            trader.trade()
+
+    except Exception as e:
+        _logger.error(f"Trading error: {e}\n{traceback.format_exc()}")
+        _notifier.error(f"Trading error: {e}\n{traceback.format_exc()}", echo='here')
+        sys.exit(1)
+
+
+@cli.command(help='run Turtle trading bot')
+@click.option('-exch', '--exchange_id', type=str, default='bybit')
+@click.option('-e', '--enter', is_flag=True, default=False)
+@click.option('-t', '--ticker', type=str)
+@click.option('-f', '--timeframe', type=str, default='4h')
+@click.option('-s', '--side', type=str)
+@click.option('-sb', '--standby-mode', is_flag=True, default=False)
+def shit_trade(exchange_id, enter, ticker, timeframe, side, standby_mode):
+    _logger.info("\n============== STARTING TRADE SESSION ==============\n")
+    try:
+        if enter:
+            process_new_shit_trader_strategy(exchange_id, ticker, timeframe, side, standby_mode)
+
+        strategy_settings = load_strategy_settings(exchange_id, agent_id='shit_trader')
+        if not strategy_settings:
+            return _logger.info("No active strategy found, skipping")
+
+        exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
+            exchange_id, sub_account_id=strategy_settings[0].sub_account_id
+        )
+        _logger.info(f"Initialising Turtle trader on {exchange_id}, "
+                     f"tickers: {[x.ticker for x in strategy_settings]}")
+        exchange_adapter.load_exchange()
+
+        for strategy in strategy_settings:
+            _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
+                         f"strategy_id: {strategy.id}-----------")
+            exchange_adapter.market = f"{strategy.ticker}"
+            trader = ShitTrader(exchange_adapter, strategy)
             _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
             trader.trade()
 
@@ -153,6 +200,7 @@ def llm_trade(exchange_id, tickers):
 def back_test(exchange_id):
     _logger.info("\n============== BACKTEST ==============\n")
     turtle_back_test(exchange_id)
+
 
 @cli.command(help='run LLM trading bot')
 @click.option('-exch', '--exchange_id', type=str, default='binance')

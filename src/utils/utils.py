@@ -154,6 +154,8 @@ def turtle_trading_signals_adjusted(df):
     df['long_exit'] = df['L'] < df['low_10'].shift(1)
     df['short_exit'] = df['H'] > df['high_10'].shift(1)
 
+    df['diff'] = df.C.diff()
+
     df = df.drop(['high_20', 'high_10', 'low_20', 'low_10'], axis=1)
     return df
 
@@ -529,20 +531,21 @@ def calculate_indicators_for_llm_entry_validator(df):
 
 
 def calculate_indicators_for_nn_30m(df):
-    df['volume_sma_7'] = calculate_sma(df, period=10, column='V')
-    df['volume_sma_14'] = calculate_sma(df, period=20, column='V')
-    df['atr_24'] = calculate_atr(df, period=20)
-    df['sma_7'] = calculate_sma(df, period=10)
-    df['sma_14'] = calculate_sma(df, period=20)
-    df['sma_28'] = calculate_sma(df, period=50)
-    df['sma_48'] = calculate_sma(df, period=100)
-    df['rsi_14'] = calculate_rsi(df, period=14)
-    df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
-    df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
-    df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
-        'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
-    df['adx_24'] = calculate_adx(df, n_periods=20)
-    df = calculate_regression_channels(df)
+    df['volume_sma_7'] = calculate_sma(df, period=7, column='V')
+    df['volume_sma_14'] = calculate_sma(df, period=14, column='V')
+    df['atr_24'] = calculate_atr(df, period=24)
+    df['atr_48'] = calculate_atr(df, period=48)
+    df['sma_7'] = calculate_sma(df, period=7)
+    df['sma_14'] = calculate_sma(df, period=14)
+    df['sma_28'] = calculate_sma(df, period=28)
+    df['sma_48'] = calculate_sma(df, period=48)
+    # df['rsi_14'] = calculate_rsi(df, period=14)
+    # df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
+    # df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+    # df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
+    #     'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
+    # df['adx_24'] = calculate_adx(df, n_periods=24)
+    df = calculate_regression_channels(df, length=100)
     df = calculate_fib_levels_rolling(df, depth=100)
     return df
 
@@ -594,7 +597,7 @@ def find_pivots(df, depth, deviation):
         return None
 
 
-def calculate_fib_levels_pivots(df, depth=20, deviation=2):
+def calculate_fib_levels_pivots(df, depth=20, deviation=3):
     result = find_pivots(df, depth, deviation)
     if result:
         pivot_high, pivot_low = result
@@ -690,7 +693,10 @@ class StrategySettingsModel:
     aggressive_pyramid_entry_multipl: float
     aggressive_price_atr_ratio: float
     pyramid_entry_limit: int
+    agent_id: str
     sub_account_id: str
+    manual_side: str
+    manual_standby_mode: bool
 
     @classmethod
     def from_orm(cls, orm_obj):
@@ -705,8 +711,11 @@ class StrategySettingsModel:
             pyramid_entry_atr_multipl=none_to_default(orm_obj.pyramid_entry_atr_multipl, 1),
             aggressive_pyramid_entry_multipl=none_to_default(orm_obj.aggressive_pyramid_entry_multipl, 0.5),
             aggressive_price_atr_ratio=none_to_default(orm_obj.aggressive_price_atr_ratio, 0.02),
+            agent_id=none_to_default(orm_obj.agent_id, None),
             pyramid_entry_limit=none_to_default(orm_obj.pyramid_entry_limit, 4),
-            sub_account_id=none_to_default(orm_obj.sub_account_id, None)
+            sub_account_id=none_to_default(orm_obj.sub_account_id, None),
+            manual_side=none_to_default(orm_obj.manual_side, None),
+            manual_standby_mode=none_to_default(orm_obj.manual_standby_mode, False)
         )
 
 
@@ -724,7 +733,10 @@ def load_strategy_settings(exchange_id, agent_id: str = 'turtle_trader') -> List
             StrategySettings.aggressive_pyramid_entry_multipl,
             StrategySettings.aggressive_price_atr_ratio,
             StrategySettings.pyramid_entry_limit,
-            StrategySettings.sub_account_id
+            StrategySettings.agent_id,
+            StrategySettings.sub_account_id,
+            StrategySettings.manual_side,
+            StrategySettings.manual_standby_mode
         ).filter(
             StrategySettings.exchange_id == exchange_id,
             StrategySettings.active == True,
@@ -740,3 +752,41 @@ def load_strategy_settings(exchange_id, agent_id: str = 'turtle_trader') -> List
     ]
 
     return result_objects
+
+
+def process_new_shit_trader_strategy(exchange_id, ticker, timeframe, side, standby_mode):
+    with trader_database.session_manager() as session:
+        strategy_setting = session.query(StrategySettings).filter(
+            StrategySettings.exchange_id == exchange_id,
+            StrategySettings.ticker == ticker,
+            StrategySettings.timeframe == timeframe,
+            StrategySettings.manual_side == side,
+            StrategySettings.manual_standby_mode == standby_mode,
+            StrategySettings.agent_id == 'shit_trader'
+        ).first()  # Retrieve the first matching record
+
+        if strategy_setting:
+            strategy_setting.active = True  # Update the 'active' attribute to True
+            session.commit()  # Commit the changes to the database
+        else:
+            new_strategy = StrategySettings(
+                exchange_id=exchange_id,
+                ticker=ticker,
+                timeframe=timeframe,
+                buffer_days=20,
+                stop_loss_atr_multipl=3,
+                pyramid_entry_atr_multipl=1.5,
+                aggressive_pyramid_entry_multipl=1,
+                aggressive_price_atr_ratio=0,
+                pyramid_entry_limit=3,
+                active=True,
+                agent_id='shit_trader',
+                sub_account_id=None,
+                manual_side=side,
+                manual_standby_mode=standby_mode
+            )
+            session.add(new_strategy)
+            session.commit()
+
+
+

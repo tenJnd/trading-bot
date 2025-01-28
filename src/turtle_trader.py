@@ -79,6 +79,7 @@ class CurrMarketConditions:
     short_entry: bool
     long_exit: bool
     short_exit: bool
+    diff: float
 
     def log_current_market_conditions(self):
         _logger.info(f'\nLONG ENTRY cond: {self.long_entry}\n'
@@ -92,6 +93,7 @@ class CurrMarketConditions:
 
 
 class TurtleTrader:
+    margin = 0.1
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
@@ -108,6 +110,7 @@ class TurtleTrader:
         self.opened_positions = None
         self.last_opened_position: LastOpenedPosition = None
         self.curr_market_conditions: CurrMarketConditions = None
+        self.prev_market_conditions: CurrMarketConditions = None
         self.last_closed_timeframe = None
         self.llm_validator = None
         self.use_llm_entry_validator = use_llm_entry_validator
@@ -268,7 +271,9 @@ class TurtleTrader:
         ohlc = turtle_trading_signals_adjusted(ohlc)
 
         curr_market_con = ohlc.iloc[-1].to_dict()
+        prev_market_con = ohlc.iloc[-2].to_dict()
         self.curr_market_conditions = CurrMarketConditions(**curr_market_con)
+        self.prev_market_conditions = CurrMarketConditions(**prev_market_con)
         self.curr_market_conditions.log_current_market_conditions()
         return ohlc
 
@@ -418,7 +423,7 @@ class TurtleTrader:
                                      self.curr_market_conditions.atr_period_ratio
                              )
                      ) / self._exchange.contract_size
-        raw_amount_max = free_balance / self.curr_market_conditions.C
+        raw_amount_max = (free_balance * (1 - self.margin)) / self.curr_market_conditions.C
         raw_amount = min(raw_amount_max, raw_amount)
 
         _logger.debug(f"Raw calculated amount: {raw_amount}")
@@ -487,13 +492,25 @@ class TurtleTrader:
         _logger.info(msg)
         _notifier.info(msg, echo='here')
 
-    def exit_position(self):
+    def turn_off_strategy(self):
+        with self._database.session_manager() as session:
+            session.query(StrategySettings).filter(
+                StrategySettings.id == self.strategy_settings.id
+            ).update(
+                {"active": False},
+                synchronize_session=False  # Use 'fetch' if objects are being used in the session
+            )
+
+    def exit_position(self, turn_off_strategy=False):
         action = 'close'
         order = self._exchange.order(action)
         if order:
             self.save_order(order, action, position_status='closed')
             self.update_closed_orders()
             self.log_total_pl()
+
+        if turn_off_strategy:
+            self.turn_off_strategy()
 
     def create_llm_validator(self) -> LlmTurtlePyramidValidator:
         validator = self.llm_validator(self._exchange, self.strategy_settings, self._database)
@@ -648,3 +665,49 @@ class TurtleTrader:
     def close_position(self):
         if self.opened_positions is not None:
             self.exit_position()
+
+
+class ShitTrader(TurtleTrader):
+
+    def __init__(self,
+                 exchange: BaseExchangeAdapter,
+                 strategy_settings: StrategySettings = None,
+                 db: PostgresqlAdapter = None,
+                 use_llm_entry_validator=False,
+                 use_llm_pyramid_validator=False,
+                 testing_file_path: bool = False,
+                 ):
+        super().__init__(
+            exchange,
+            strategy_settings,
+            db,
+            use_llm_entry_validator,
+            use_llm_pyramid_validator,
+            testing_file_path
+        )
+
+    def process_no_positions(self):
+        side = self.strategy_settings.manual_side
+        standby_mode = self.strategy_settings.manual_standby_mode
+        if side == 'short':
+            if standby_mode:
+                if self.prev_market_conditions.diff < 0:
+                    self.entry_position(side)
+            else:
+                self.entry_position(side)
+
+        elif side == 'long':
+            if standby_mode:
+                if self.prev_market_conditions.diff > 0:
+                    self.entry_position(side)
+            else:
+                self.entry_position(side)
+        else:
+            _logger.info(f"No position opened")
+
+    def exit_position(self, turn_off_strategy=False):
+        super().exit_position(turn_off_strategy=True)
+
+    def close_position(self):
+        if self.opened_positions is not None:
+            self.exit_position(turn_off_strategy=True)
