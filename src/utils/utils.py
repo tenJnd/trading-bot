@@ -719,8 +719,8 @@ class StrategySettingsModel:
         )
 
 
-def load_strategy_settings(exchange_id, agent_id: str = 'turtle_trader') -> List[StrategySettingsModel]:
-    with trader_database.session_manager() as session:
+def load_strategy_settings(exchange_id, agent_id: str = None) -> List[StrategySettingsModel]:
+    with (trader_database.session_manager() as session):
         # Querying only the necessary columns
         settings = session.query(
             StrategySettings.id,
@@ -740,8 +740,12 @@ def load_strategy_settings(exchange_id, agent_id: str = 'turtle_trader') -> List
         ).filter(
             StrategySettings.exchange_id == exchange_id,
             StrategySettings.active == True,
-            StrategySettings.agent_id == agent_id
-        ).order_by(
+        )
+
+        if agent_id:
+            settings = settings.filter(StrategySettings.agent_id == agent_id)
+
+        settings = settings.order_by(
             StrategySettings.timestamp_created
         ).all()
 
@@ -785,8 +789,10 @@ def process_new_shit_trader_strategy(exchange_id, ticker, timeframe, side, stand
                 manual_side=side,
                 manual_standby_mode=standby_mode
             )
+            _logger.info(f"Adding new shitcoin strategy: {new_strategy}")
             session.add(new_strategy)
             session.commit()
+            _logger.info('strategy added')
 
 
 

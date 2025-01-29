@@ -46,16 +46,18 @@ def close_position(exchange, strategy_id):
         'turtle_trader': TurtleTrader,
         'shit_trader': ShitTrader
     }
-
     try:
         strategy_settings = load_strategy_settings(exchange)
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
 
-        exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange)
-        exchange.load_exchange()
         for strategy in strategy_settings:
             if strategy.id == strategy_id:
+                exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(
+                    exchange,
+                    sub_account_id=strategy.sub_account_id
+                )
+                exchange.load_exchange()
                 trader_obj = agent_map.get(strategy.agent_id)
                 exchange.market = f"{strategy.ticker}"
                 trader = trader_obj(exchange, strategy)
@@ -67,11 +69,11 @@ def close_position(exchange, strategy_id):
 
 
 @cli.command(help='run Turtle trading bot')
-@click.option('-exch', '--exchange_id', type=str, default='binance')
+@click.option('-exch', '--exchange_id', type=str, default='bybit')
 def trade(exchange_id):
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")
     try:
-        strategy_settings = load_strategy_settings(exchange_id)
+        strategy_settings = load_strategy_settings(exchange_id, agent_id='turtle_trader')
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
 
