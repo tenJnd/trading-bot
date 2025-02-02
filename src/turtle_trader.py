@@ -358,6 +358,8 @@ class TurtleTrader:
     def update_stop_loss(self, stop_loss_price):
         # TODO check agent stop loss
         _logger.info(f"Updating stop loss to price: {stop_loss_price}...")
+        _notifier.info(f"{self.get_ticker_exchange_string('sl update')}"
+                       f"setting new stop-loss: {stop_loss_price}", echo='here')
         with self._database.session_manager() as session:
             session.query(Order).filter(
                 Order.id == self.last_opened_position.id
@@ -580,7 +582,6 @@ class TurtleTrader:
     def process_pyramid_entry(self, action):
         pyramid_stop = self.n_of_opened_positions > self.strategy_settings.pyramid_entry_limit
         if pyramid_stop:
-            _logger.info(f'Pyramid stop = {pyramid_stop} -> just updating stop-loss')
             # just update stop-loss
             stop_loss_price = self.get_stop_loss_price(action)
             self.update_stop_loss(stop_loss_price)
