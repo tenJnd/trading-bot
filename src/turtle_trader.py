@@ -577,6 +577,21 @@ class TurtleTrader:
                 _logger.error(msg)
                 _notifier.error(msg, echo='here')
 
+    def process_pyramid_entry(self, action):
+        pyramid_stop = self.n_of_opened_positions > self.strategy_settings.pyramid_entry_limit
+        if pyramid_stop:
+            _logger.info(f'Pyramid stop = {pyramid_stop} -> just updating stop-loss')
+            # just update stop-loss
+            stop_loss_price = self.get_stop_loss_price(action)
+            self.update_stop_loss(stop_loss_price)
+        elif self.use_llm_pyramid_validator:
+            # validate pyramid with llm
+            _logger.info(f'Adding to {action} position -> check w LLM validator')
+            self.entry_w_validation(action)
+        else:
+            # entry pyramid
+            self.entry_position(action)
+
     def process_opened_position(self):
         _logger.info('Processing opened positions')
         self.llm_validator = LlmTurtlePyramidValidator
@@ -586,11 +601,11 @@ class TurtleTrader:
         long_pyramid_price, short_pyramid_price = self.get_atr_for_pyramid()
 
         # check if number of pyramid trade is over limit
-        pyramid_stop = self.n_of_opened_positions > self.strategy_settings.pyramid_entry_limit
         self.minimal_entry_cost = self.minimal_entry_cost / 2
         _logger.info(f"Setting minimal entry cost to {self.minimal_entry_cost}")
 
         if self.last_opened_position.is_long():
+            action = 'long'
             # exit position
             if curr_mar_cond.long_exit:
                 _logger.info('Exiting long position/s')
@@ -600,16 +615,13 @@ class TurtleTrader:
                 _logger.info('Initiating long stop-loss')
                 self.exit_position()
             # add to position -> pyramiding
-            elif curr_mar_cond.C >= long_pyramid_price and not pyramid_stop:
-                _logger.info(f'Adding to long position -> check w LLM validator')
-                if self.use_llm_pyramid_validator:
-                    self.entry_w_validation('long')
-                else:
-                    self.entry_position('long')
+            elif curr_mar_cond.C >= long_pyramid_price:
+                self.process_pyramid_entry(action)
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
         else:
+            action = 'short'
             # exit position
             if curr_mar_cond.short_exit:
                 _logger.info('Exiting short position/s')
@@ -619,12 +631,8 @@ class TurtleTrader:
                 _logger.info('Initiating short stop-loss')
                 self.exit_position()
             # add to position -> pyramiding
-            elif curr_mar_cond.C <= short_pyramid_price and not pyramid_stop:
-                _logger.info(f'Adding to short position -> check w LLM validator')
-                if self.use_llm_pyramid_validator:
-                    self.entry_w_validation('short')
-                else:
-                    self.entry_position('short')
+            elif curr_mar_cond.C <= short_pyramid_price:
+                self.process_pyramid_entry(action)
             else:
                 _logger.info('Staying in position '
                              '-> no condition for opened position is met')
