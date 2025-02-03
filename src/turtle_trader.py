@@ -585,8 +585,8 @@ class TurtleTrader:
             # just update stop-loss
             new_stop_loss_price = self.get_stop_loss_price(action)
             last_stop_loss = self.last_opened_position.stop_loss_price
-            if ((action == 'long' and last_stop_loss > new_stop_loss_price) or
-                    (action == 'short' and last_stop_loss < new_stop_loss_price)):
+            if ((action == 'long' and last_stop_loss < new_stop_loss_price) or
+                    (action == 'short' and last_stop_loss > new_stop_loss_price)):
                 self.update_stop_loss(new_stop_loss_price)
         elif self.use_llm_pyramid_validator:
             # validate pyramid with llm
