@@ -619,7 +619,7 @@ class TurtleTrader:
                 _logger.info('Initiating long stop-loss')
                 self.exit_position()
             # add to position -> pyramiding
-            elif curr_mar_cond.C >= long_pyramid_price:
+            elif curr_mar_cond.H >= long_pyramid_price:
                 self.process_pyramid_entry(action)
             else:
                 _logger.info('Staying in position '
@@ -635,7 +635,7 @@ class TurtleTrader:
                 _logger.info('Initiating short stop-loss')
                 self.exit_position()
             # add to position -> pyramiding
-            elif curr_mar_cond.C <= short_pyramid_price:
+            elif curr_mar_cond.L <= short_pyramid_price:
                 self.process_pyramid_entry(action)
             else:
                 _logger.info('Staying in position '
