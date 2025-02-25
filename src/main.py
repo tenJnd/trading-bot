@@ -39,9 +39,10 @@ def log_pl(exchange_id):
 
 @cli.command(help='close position manually')
 @click.option('-exch', '--exchange', type=str, default='bybit')
-@click.option('-si', '--strategy_id', type=int)
-def close_position(exchange, strategy_id):
-    _logger.info(f"\n============== CLOSING POSITION {strategy_id} ==============\n")
+@click.option('-si', '--strategy_ids', type=str)
+def close_position(exchange, strategy_ids):
+    strategy_ids = [int(sid) for sid in strategy_ids.split(',')]
+    _logger.info(f"\n============== CLOSING POSITION {strategy_ids} ==============\n")
     agent_map = {
         'turtle_trader': TurtleTrader,
         'shit_trader': ShitTrader
@@ -52,7 +53,7 @@ def close_position(exchange, strategy_id):
             return _logger.info("No active strategy found, skipping")
 
         for strategy in strategy_settings:
-            if strategy.id == strategy_id:
+            if strategy.id in strategy_ids:
                 exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(
                     exchange,
                     sub_account_id=strategy.sub_account_id
