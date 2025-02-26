@@ -3,6 +3,8 @@ import sys
 import traceback
 
 import click
+import numpy as np
+import pandas as pd
 from jnd_utils.log import init_logging
 from slack_bot.notifications import SlackNotifier
 
@@ -38,9 +40,9 @@ def log_pl(exchange_id):
 
 
 @cli.command(help='close position manually')
-@click.option('-exch', '--exchange', type=str, default='bybit')
+@click.option('-exch', '--exchange_id', type=str, default='bybit')
 @click.option('-si', '--strategy_ids', type=str)
-def close_position(exchange, strategy_ids):
+def close_position(exchange_id, strategy_ids):
     strategy_ids = [int(sid) for sid in strategy_ids.split(',')]
     _logger.info(f"\n============== CLOSING POSITION {strategy_ids} ==============\n")
     agent_map = {
@@ -48,14 +50,14 @@ def close_position(exchange, strategy_ids):
         'shit_trader': ShitTrader
     }
     try:
-        strategy_settings = load_strategy_settings(exchange)
+        strategy_settings = load_strategy_settings(exchange_id)
         if not strategy_settings:
             return _logger.info("No active strategy found, skipping")
 
         for strategy in strategy_settings:
             if strategy.id in strategy_ids:
                 exchange: BaseExchangeAdapter = ExchangeFactory.get_exchange(
-                    exchange,
+                    exchange_id,
                     sub_account_id=strategy.sub_account_id
                 )
                 exchange.load_exchange()
@@ -199,24 +201,84 @@ def llm_trade(exchange_id, tickers):
 
 
 @cli.command(help='run LLM trading bot')
-@click.option('-exch', '--exchange_id', type=str, default='binance')
+@click.option('-exch', '--exchange_id', type=str, default='bybit')
 def back_test(exchange_id):
     _logger.info("\n============== BACKTEST ==============\n")
     turtle_back_test(exchange_id)
 
 
 @cli.command(help='run LLM trading bot')
-@click.option('-exch', '--exchange_id', type=str, default='binance')
-def test_balance(exchange_id):
-    # Llm Trader for each picked ticker
-    exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
-        exchange_id, 'subAccount1'
-    )
+@click.option('-exch', '--exchange_id', type=str, default='bybit')
+def test_volprofile(exchange_id):
+    exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(exchange_id, 'subAccount1')
     exchange_adapter.load_exchange()
     exchange_adapter.market = 'BTC'
-    balance = exchange_adapter.free_balance
-    print(balance)
+    df = exchange_adapter.fetch_ohlc(days=10, timeframe='1d')
 
+    # Use -3 for high/low, -2 for close/volume
+    prev_high, prev_low = df.iloc[-2]['H'], df.iloc[-2]['L']
+    prev_close, prev_volume = df.iloc[-2]['C'], df.iloc[-2]['V']
+
+    # Define finer price bins
+    num_bins = 100
+    price_bins = np.linspace(prev_low, prev_high, num_bins)
+
+    # Assign each closing price to a bin
+    df['price_bin'] = pd.cut(df['C'], bins=price_bins, labels=False)
+
+    # Compute volume profile
+    volume_profile = df.groupby('price_bin')['V'].sum().dropna()
+
+    # Validate total volume
+    total_volume = volume_profile.sum()
+    if total_volume == 0:
+        raise ValueError("Total volume is zero. Check data source.")
+
+    # Normalize volume
+    volume_profile /= total_volume
+
+    # Sort bins by volume & compute cumulative sum
+    volume_profile_sorted = volume_profile.sort_values(ascending=False)
+    cumulative_volume = volume_profile_sorted.cumsum()
+
+    # Debugging Output
+    print("🔍 Volume Profile (Top 10 Levels):")
+    print(volume_profile_sorted.head(10))
+    print("🔍 Cumulative Volume (Top 10 Levels):")
+    print(cumulative_volume.head(10))
+
+    # Accumulate volume until we reach 70%
+    value_area_threshold = 0.70
+    cumulative_sum, value_area_bins = 0, []
+
+    for index, volume in volume_profile_sorted.items():
+        cumulative_sum += volume
+        value_area_bins.append(index)
+        if cumulative_sum >= value_area_threshold:
+            break
+
+    # Ensure value_area_bins is not empty
+    if not value_area_bins:
+        raise ValueError("Error: No valid value area bins found. Possible issue with volume distribution.")
+
+    # Convert to integer indices & validate range
+    value_area_bins = [int(x) for x in value_area_bins]
+    if min(value_area_bins) < 0 or max(value_area_bins) >= len(price_bins):
+        raise ValueError(f"Index out of range: min={min(value_area_bins)}, max={max(value_area_bins)}")
+
+    # 🔥 **Fix: Ensuring VAH > VAL**
+    VAL, VAH = sorted([price_bins[min(value_area_bins)], price_bins[max(value_area_bins)]])
+
+    # Identify POC (highest volume bin)
+    POC_index = volume_profile_sorted.idxmax()
+    if np.isnan(POC_index) or POC_index < 0 or POC_index >= len(price_bins):
+        raise ValueError(f"Invalid POC index: {POC_index}")
+
+    POC = price_bins[int(POC_index)]
+
+    print(f"✅ Adjusted VAH: {VAH}, VAL: {VAL}, POC: {POC}")
+
+    return VAH, VAL, POC
 
 if __name__ == '__main__':
     init_logging()
