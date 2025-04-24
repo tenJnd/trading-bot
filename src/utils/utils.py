@@ -778,11 +778,11 @@ def process_new_shit_trader_strategy(exchange_id, ticker, timeframe, side, stand
                 ticker=ticker,
                 timeframe=timeframe,
                 buffer_days=20,
-                stop_loss_atr_multipl=3,
-                pyramid_entry_atr_multipl=1.5,
+                stop_loss_atr_multipl=2,
+                pyramid_entry_atr_multipl=1,
                 aggressive_pyramid_entry_multipl=1,
                 aggressive_price_atr_ratio=0,
-                pyramid_entry_limit=3,
+                pyramid_entry_limit=1,
                 active=True,
                 agent_id='shit_trader',
                 sub_account_id=None,
@@ -793,6 +793,3 @@ def process_new_shit_trader_strategy(exchange_id, ticker, timeframe, side, stand
             session.add(new_strategy)
             session.commit()
             _logger.info('strategy added')
-
-
-
