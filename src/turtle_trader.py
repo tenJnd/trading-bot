@@ -99,6 +99,7 @@ class TurtleTrader:
                  exchange: BaseExchangeAdapter,
                  strategy_settings: StrategySettings = None,
                  db: PostgresqlAdapter = None,
+                 trade_risk: float = None,
                  use_llm_entry_validator=False,
                  use_llm_pyramid_validator=False,
                  testing_file_path: bool = False,
@@ -106,6 +107,10 @@ class TurtleTrader:
         self.strategy_settings = strategy_settings
         self._exchange = exchange
         self._database = trader_database if not db else db
+        if not trade_risk:
+            self.trade_risk = TRADE_RISK_ALLOCATION
+        else:
+            self.trade_risk = trade_risk
 
         self.opened_positions = None
         self.last_opened_position: LastOpenedPosition = None
@@ -416,7 +421,7 @@ class TurtleTrader:
         total_balance = self._exchange.total_balance
         free_balance = self.recalc_limited_free_entry_balance(free_balance, total_balance)
 
-        trade_risk_cap = free_balance * TRADE_RISK_ALLOCATION
+        trade_risk_cap = free_balance * self.trade_risk
         raw_amount = (
                              trade_risk_cap /
                              (
@@ -668,7 +673,7 @@ class TurtleTrader:
             if self.last_closed_timeframe:
                 if self.last_closed_timeframe == self.curr_market_conditions.timeframe:
                     _logger.info('Timeframe is the same as the last closed position -> SKIPPING')
-                    return
+                    # return
 
             self.process_no_positions()
         else:
@@ -685,6 +690,7 @@ class ShitTrader(TurtleTrader):
                  exchange: BaseExchangeAdapter,
                  strategy_settings: StrategySettings = None,
                  db: PostgresqlAdapter = None,
+                 trade_risk: float = None,
                  use_llm_entry_validator=False,
                  use_llm_pyramid_validator=False,
                  testing_file_path: bool = False,
@@ -693,6 +699,7 @@ class ShitTrader(TurtleTrader):
             exchange,
             strategy_settings,
             db,
+            trade_risk,
             use_llm_entry_validator,
             use_llm_pyramid_validator,
             testing_file_path

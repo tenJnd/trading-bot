@@ -36,7 +36,7 @@ def log_pl(exchange_id):
     strategy_settings = load_strategy_settings(exchange_id)
     for strategy in strategy_settings:
         exchange.market = f"{strategy.ticker}"
-        TurtleTrader(exchange, strategy).log_total_pl()
+        TurtleTrader(exchange=exchange, strategy_settings=strategy).log_total_pl()
 
 
 @cli.command(help='close position manually')
@@ -100,7 +100,7 @@ def trade(exchange_id):
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
                          f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
-            trader = TurtleTrader(exchange_adapter, strategy)
+            trader = TurtleTrader(exchange=exchange_adapter, strategy_settings=strategy)
             _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
             trader.trade()
 
@@ -117,7 +117,8 @@ def trade(exchange_id):
 @click.option('-f', '--timeframe', type=str, default='4h')
 @click.option('-s', '--side', type=str)
 @click.option('-sb', '--standby-mode', is_flag=True, default=False)
-def shit_trade(exchange_id, enter, ticker, timeframe, side, standby_mode):
+@click.option('-r', '--risk', type=float, default=None)
+def shit_trade(exchange_id, enter, ticker, timeframe, side, standby_mode, risk):
     _logger.info("\n============== STARTING TRADE SESSION ==============\n")
     try:
         if enter:
@@ -138,7 +139,7 @@ def shit_trade(exchange_id, enter, ticker, timeframe, side, standby_mode):
             _logger.info(f"\n\n----------- Starting trade - {strategy.ticker}, "
                          f"strategy_id: {strategy.id}-----------")
             exchange_adapter.market = f"{strategy.ticker}"
-            trader = ShitTrader(exchange_adapter, strategy)
+            trader = ShitTrader(exchange=exchange_adapter, strategy_settings=strategy, trade_risk=risk)
             _logger.debug(f"Market info before trading: {exchange_adapter.market_info}")
             trader.trade()
 
