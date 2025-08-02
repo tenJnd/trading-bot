@@ -7,9 +7,11 @@ from datetime import datetime
 import gym
 import matplotlib.pyplot as plt
 import numpy as np
+import sqlalchemy.exc
 import tensorflow as tf
 from gym import spaces
 from jnd_utils.log import init_logging
+from retrying import retry
 
 from agent_training_data import prepare_training_data
 from src.exchange_adapter import BaseExchangeAdapter
@@ -24,6 +26,8 @@ if gpus:
         # Currently, memory growth needs to be the same across GPUs
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
+            tf.config.optimizer.set_jit(True)  # Enable XLA compilation for faster execution
+            tf.config.optimizer.set_experimental_options({'layout_optimizer': True})
     except RuntimeError as e:
         # Memory growth must be set before GPUs have been initialized
         print(e)
@@ -32,405 +36,31 @@ _logger = logging.getLogger(__name__)
 
 
 # Define the Trading Environment
-class TradingEnv(gym.Env):
-    """A trading environment for reinforcement learning with dynamic features."""
 
-    def __init__(self, data_shape_len, initial_investment=1_000):
-        super(TradingEnv, self).__init__()
-        self.orig_data = ...
-        self.data = ...
-        self.initial_investment = initial_investment
-        self.current_step = 0
-        self.done = False
-        self.position = 0  # -1: short, 0: no position, 1: long
-        self.entry_price = 0
-        self.balance = initial_investment
-        self.asset_held = 0
-        self.step_returns = []
-        self.max_balance = initial_investment
-        self.action_space = spaces.Discrete(4)  # 0: hold, 1: buy, 2: sell, 3: close
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
-                                            shape=(data_shape_len,),
-                                            dtype=np.float32)
-
-    def step(self, action):
-        previous_balance = self.balance
-
-        # Check if we've reached the end of the dataset
-        if self.current_step >= len(self.data) - 1:
-            self.done = True
-
-        # Get the current market price
-        current_price = self.orig_data.iloc[self.current_step]['C']
-        previous_low = self.orig_data.iloc[self.current_step - 1]['L'] if self.current_step > 0 else self.entry_price
-        previous_high = self.orig_data.iloc[self.current_step - 1]['H'] if self.current_step > 0 else self.entry_price
-        atr = self.orig_data.iloc[self.current_step]['atr_24']
-        transaction_cost = 0.06 / 100
-
-        reward = 0
-        actual_profit = 0
-        stop_loss_price = self.entry_price - (3 * atr) \
-            if self.position == 1 \
-            else self.entry_price + (3 * atr) \
-            if self.position == -1 else None
-
-        if self.position != 0 and stop_loss_price is not None:
-            if (self.position == 1 and previous_low <= stop_loss_price) or (
-                    self.position == -1 and previous_high >= stop_loss_price):
-                actual_profit += self.close_position(current_price, transaction_cost)
-
-        # Execute trading actions
-        if action == 1 or action == 2:  # Buy/Long or Sell/Short
-            new_position = 1 if action == 1 else -1
-
-            # TODO: should reverse?
-            # Only close the position if the action is in the opposite direction
-            if self.position != new_position:
-                actual_profit += self.close_position(current_price, transaction_cost)
-
-                stop_loss_distance = 3 * atr
-
-                max_positions_size = self.balance / current_price
-                position_size = (self.balance * 0.03) / stop_loss_distance
-                position_size = min(max_positions_size, position_size)
-                transaction_cost_amount = position_size * current_price * transaction_cost
-                self.asset_held = position_size
-                self.entry_price = current_price
-                self.position = new_position
-                self.balance -= transaction_cost_amount
-                actual_profit -= transaction_cost_amount
-
-        elif action == 3:  # Close position
-            actual_profit += self.close_position(current_price, transaction_cost)
-
-        if actual_profit != 0 and previous_balance != 0:
-            reward += actual_profit
-
-        step_return = ((self.balance - previous_balance) / previous_balance if previous_balance != 0 else 0)
-        self.step_returns.append(step_return)
-
-        sharpe_ratio = self.calculate_sharpe_ratio()
-
-        drawdown = ((self.max_balance - self.balance) / self.max_balance if self.max_balance != 0 else 0)
-        self.max_balance = max(self.max_balance, self.balance)
-        risk_adjusted_reward = round(reward, 2)  # + (sharpe_ratio / 100) - drawdown
-
-        next_state = self.data.iloc[self.current_step]
-        info = {
-            'reward': reward,
-            'profit': round(actual_profit, 2),
-            'profit_percent_per_trade': round(step_return * 100, 1),
-            'balance': round(self.balance, 1),
-            'sharpe_ratio': round(sharpe_ratio, 2),
-            'drawdown': round(drawdown, 5),
-            'stop_loss': stop_loss_price
-        }
-        _logger.info(f'action: {action}, '
-                     f'position: {self.position}, '
-                     f'asset_held: {round(self.asset_held, 5)}, '
-                     f'entry_price: {self.entry_price}, '
-                     f'{info}')
-
-        self.current_step += 1
-        return next_state, risk_adjusted_reward, self.done, info
-
-    def close_position(self, current_price, transaction_cost):
-        if self.position != 0:
-            price_difference = (current_price - self.entry_price) if self.position == 1 else (
-                    self.entry_price - current_price)
-            profit = price_difference * self.asset_held
-            transaction_cost_amount = self.asset_held * current_price * transaction_cost
-            actual_profit = profit - transaction_cost_amount
-            self.balance += actual_profit
-            self.position = 0
-            self.entry_price = 0
-            self.asset_held = 0
-            return actual_profit
-        return 0
-
-    def calculate_sharpe_ratio(self, window_size=40):
-        """Calculate the Sharpe Ratio for the last window_size returns, assuming returns are very frequent."""
-        if len(self.step_returns) >= window_size:
-            mean_return = np.mean(self.step_returns[-window_size:])
-            std_dev = np.std(self.step_returns[-window_size:])
-            if std_dev > 0:
-                # Adjust Sharpe Ratio calculation by a suitable annualization factor if needed
-                annualization_factor = np.sqrt(252 * 48)  # Annualizing assuming 48 half-hour periods in a trading day
-                sharpe_ratio = (mean_return / std_dev) * annualization_factor
-            else:
-                sharpe_ratio = 0
-        else:
-            sharpe_ratio = 0  # Not enough data points to compute a reliable Sharpe Ratio
-        return sharpe_ratio
-
-    def reset(self, scaled_data, orig_data):
-        self.current_step = 0
-        self.done = False
-        self.position = 0
-        self.entry_price = 0
-        self.balance = self.initial_investment
-        self.orig_data = orig_data
-        self.data = scaled_data
-        return self.data.iloc[self.current_step]
-
-    def render(self, mode='human'):
-        pass  # Optional
-
-
-class PrioritizedReplayBuffer:
-    def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
-        self.priorities = deque(maxlen=capacity)
-        self.max_priority = 1.0
-
-    def append(self, experience):
-        self.buffer.append(experience)
-        self.priorities.append(self.max_priority)
-
-    def sample(self, batch_size, alpha=0.6):
-        scaled_priorities = np.array(self.priorities) ** alpha
-        sample_probs = scaled_priorities / sum(scaled_priorities)
-        indices = np.random.choice(len(self.buffer), batch_size, p=sample_probs)
-        samples = [self.buffer[i] for i in indices]
-        return samples, indices
-
-    def update_priorities(self, indices, errors, offset=0.1):
-        for idx, error in zip(indices, errors):
-            self.priorities[idx] = offset + error
-            self.max_priority = max(self.max_priority, error)
-
-
-# Define the DQN Agent
-class DQNAgent:
-    def __init__(self, state_shape, action_size):
-        self.state_shape = state_shape
-        self.action_size = action_size
-        self.memory = PrioritizedReplayBuffer(50000)
-        self.gamma = 0.95  # discount rate
-        self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.model = self._create_model()
-        self.target_model = self._create_model()
-        self.update_target_model()
-
-    def _create_model(self):
-        model = tf.keras.Sequential([
-            tf.keras.layers.Dense(128, activation='relu', input_shape=(self.state_shape,)),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(self.action_size, activation='linear')
-        ])
-
-        # Setup learning rate scheduler
-        initial_learning_rate = 0.001
-        lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-            initial_learning_rate,
-            decay_steps=10000,
-            decay_rate=0.96,
-            staircase=True)
-
-        # Compile model with the learning rate scheduler
-        model.compile(
-            loss='mse',
-            optimizer=tf.keras.optimizers.Adam(learning_rate=lr_schedule),
-            metrics=[
-                'mean_squared_error',
-                'mean_absolute_error',
-                'mean_absolute_percentage_error'
-            ]
-        )
-        return model
-
-    def update_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
-
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
-
-    def act(self, state):
-        if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
-        act_values = self.model.predict(state, verbose=0)
-        return np.argmax(act_values[0])
-
-    def replay(self, batch_size, callbacks=[]):
-        if len(self.memory.buffer) < batch_size:
-            return  # Ensure enough samples are available
-
-        minibatch, indices = self.memory.sample(batch_size)
-        states, target_fs, errors = [], [], []
-
-        for idx, (state, action, reward, next_state, done) in enumerate(minibatch):
-            target = reward
-            if not done:
-                target = reward + self.gamma * np.amax(self.target_model.predict(next_state, verbose=0)[0])
-
-            target_f = self.model.predict(state, verbose=0)
-            errors.append(np.abs(target_f[0][action] - target))  # Calculate and store the error for this sample
-            target_f[0][action] = target
-            states.append(state[0])  # Accumulate states
-            target_fs.append(target_f[0])  # Accumulate target_f values
-
-        # Fit all at once
-        self.model.fit(np.array(states), np.array(target_fs), batch_size=batch_size, verbose=0, callbacks=callbacks)
-
-        # Update priorities based on the prediction error
-        self.memory.update_priorities(indices, errors)
-
-
-class TrainingLogger(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        _logger.info(f"Epoch {epoch}: Loss: {logs.get('loss')}, Accuracy: {logs.get('accuracy')}")
-        # Add other metrics you want to log
-
-
-class ModelTrainer:
-
-    def __init__(self, zipped_groups, num_of_groups, model_suffix):
-        _logger.info("Num GPUs Available: %d", len(tf.config.experimental.list_physical_devices('GPU')))
-        tf.test.gpu_device_name()
-        self.checkpoint_filepath = f'model_checkpoint_{model_suffix}.weights.h5'
-        self.zipp_groups = zipped_groups
-        self.num_of_episodes = num_of_groups
-
-        log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(
-            log_dir=log_dir, histogram_freq=1, write_graph=True
-        )
-
-        self.logger = TrainingLogger()
-        self.model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath=self.checkpoint_filepath,
-            save_weights_only=True,
-            monitor='loss',  # Choose the metric to monitor
-            mode='min',
-            save_best_only=True)
-
-        self.early_stopping_callback = tf.keras.callbacks.EarlyStopping(
-            monitor='loss',  # Choose the metric to monitor
-            patience=10,  # Number of epochs with no improvement after which training will be stopped
-            restore_best_weights=True)
-
-    def train_agent(self, env, agent, resume=True):
-
-        # Load the last checkpoint if resume is True
-        if resume and os.path.isfile(self.checkpoint_filepath):
-            _logger.info("Resuming from last checkpoint...")
-            agent.model.load_weights(self.checkpoint_filepath)
-
-        processed_episodes = load_processed_episodes()
-
-        total_rewards = []
-        total_profits = []
-        sharpe_ratios = []
-        max_drawdowns = []
-        profitable_trades = []
-        episode_count = 0
-
-        with tf.device('/GPU:0'):
-            for (_, scaled_data), (e_og, orig_data) in self.zipp_groups:
-                if str(e_og) in processed_episodes:
-                    continue
-
-                group_len = len(orig_data)
-
-                state = env.reset(scaled_data, orig_data)
-                state = np.reshape(state, [1, env.observation_space.shape[0]])
-                total_reward = 0
-                total_profit = 0
-                episode_sharpe_ratios = []
-                episode_max_drawdown = 0
-                episode_profitable_trades = 0
-                episode_loss_trades = 0
-
-                step_count = 1
-                while True:  # Maximum timesteps per episode
-                    action = agent.act(state)
-                    next_state, reward, done, info = env.step(action)
-                    next_state = np.reshape(next_state, [1, env.observation_space.shape[0]])
-                    total_reward += reward
-                    step_count += 1
-
-                    profit = info['profit']
-                    balance = info['balance']
-                    total_profit += profit
-                    episode_sharpe_ratios.append(info['sharpe_ratio'])
-                    episode_max_drawdown = max(episode_max_drawdown, info['drawdown'])
-
-                    # Track Profitable Trades
-                    if profit > 0:
-                        episode_profitable_trades += 1
-                    if profit < 0:
-                        episode_loss_trades += 1
-
-                    agent.remember(state, action, reward, next_state, done)
-                    state = next_state
-
-                    # \\d_logger.info("creating replays...")
-                    agent.replay(group_len * 3, callbacks=[
-                        self.tensorboard_callback,
-                        self.model_checkpoint_callback,
-                        self.early_stopping_callback,
-                        # Other callbacks...
-                    ])
-
-                    if done:
-                        total_rewards.append(total_reward)
-                        total_profits.append(total_profit)
-                        sharpe_ratios.append(np.mean(episode_sharpe_ratios))
-                        max_drawdowns.append(episode_max_drawdown)
-                        profitable_trades.append(episode_profitable_trades)
-                        _logger.info(f"\nEND --> Episode: {episode_count}/{self.num_of_episodes}, "
-                                     f"balance: {balance}, "
-                                     f"Total Reward: {round(total_reward, 1)}, "
-                                     f"Total Profit: {round(total_profit, 1)}, "
-                                     f"Total Sum profits: {round(sum(total_profits), 1)}, "
-                                     f"Sharpe Ratio: {round(np.mean(episode_sharpe_ratios), 4)}, "
-                                     f"Total Mean Sharpe Ratio: {round(np.mean(sharpe_ratios), 4)}, "
-                                     f"Max Drawdown: {round(episode_max_drawdown, 3)}, "
-                                     f"Profitable Trades: {episode_profitable_trades} "
-                                     f"Loss Trades: {episode_loss_trades}\n")
-                        episode_count += 1
-
-                        save_episode(
-                            e_og,
-                            balance,
-                            total_reward,
-                            total_profit,
-                            episode_profitable_trades,
-                            episode_loss_trades
-                        )
-                        break
-
-                    if episode_count % 5 == 0:  # Update target model periodically
-                        agent.update_target_model()
-
-            plot_training_performance(total_rewards, 'training_plot.png')
-        return agent
-
-
-def load_processed_episodes():
+def load_processed_episodes(suffix):
     with trader_database.session_manager() as session:
-        stmt = session.query(EpisodesTraining.episode_group).all()
+        stmt = session.query(EpisodesTraining.episode_group).filter(
+            EpisodesTraining.model_suffix == suffix
+        ).all()
         result = [row[0] for row in stmt]  # Extract the first element from each tuple
     return result
 
 
-def save_episode(episode, balance, reward, profit, win_trades, loss_trades):
+@retry(retry_on_exception=lambda e: isinstance(e, sqlalchemy.exc.OperationalError),
+       stop_max_attempt_number=5,
+       wait_exponential_multiplier=1500)
+def save_episode(episode, balance, reward, profit, win_trades, loss_trades, suffix):
+    # TODO: OperationalError
     _logger.info(f"Saving episode {episode}..")
     with trader_database.session_manager() as session:
         result = EpisodesTraining(
             episode_group=episode,
             balance=balance,
             total_reward=round(reward, 2),
-            total_profit=round(profit, 2),
+            profit_closed_trades=round(profit, 2),
             win_trades=win_trades,
             lost_trades=loss_trades,
+            model_suffix=suffix
         )
         session.add(result)
         session.commit()
@@ -467,37 +97,397 @@ def load_model(model_name='trading_model.h5'):
     return tf.keras.models.load_model(model_name)
 
 
-if __name__ == '__main__':
-    init_logging()
-    ticker, length_days, timeframe = 'BTC', 20, '30m'
-    groups = 'day'
+class TrainingLogger(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        _logger.info(f"Epoch {epoch}: Loss: {logs.get('loss')}, Accuracy: {logs.get('accuracy')}")
 
-    # Assume 'data' is your preprocessed DataFrame
-    # data = pd.read_csv(f'data/input_data.csv')
+
+def create_gru_model(state_shape, action_size):
+    model = GRUDQN(state_shape, action_size)
+
+    # Create a dummy input to ensure the model is built
+    dummy_input = np.zeros((1, 1, state_shape))
+    model(dummy_input)  # This call ensures the model is built
+
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        loss='mse',
+        metrics=['mean_squared_error']
+    )
+    return model
+
+
+class GRUDQN(tf.keras.Model):
+    def __init__(self, state_shape, action_size, gru_units=32, dropout_rate=0.2, l2_reg=0.01):
+        super(GRUDQN, self).__init__()
+        self.gru = tf.keras.layers.GRU(
+            gru_units,
+            return_sequences=False,
+            input_shape=(1, state_shape),
+            recurrent_activation="sigmoid",
+            kernel_regularizer=tf.keras.regularizers.l2(l2_reg)
+        )
+        self.dense1 = tf.keras.layers.Dense(
+            32,
+            activation='relu',
+            kernel_regularizer=tf.keras.regularizers.l2(l2_reg)
+        )
+        self.dropout1 = tf.keras.layers.Dropout(dropout_rate)
+        self.dense2 = tf.keras.layers.Dense(
+            16,
+            activation='relu',
+            kernel_regularizer=tf.keras.regularizers.l2(l2_reg)
+        )
+        self.dropout2 = tf.keras.layers.Dropout(dropout_rate)
+        self.output_layer = tf.keras.layers.Dense(
+            action_size,
+            activation='linear',
+            kernel_regularizer=tf.keras.regularizers.l2(l2_reg)
+        )
+
+    def call(self, inputs):
+        x = self.gru(inputs)
+        x = self.dense1(x)
+        x = self.dropout1(x, training=True)  # Apply dropout during training
+        x = self.dense2(x)
+        x = self.dropout2(x, training=True)
+        return self.output_layer(x)
+
+
+class LSTMDQNAgent:
+    def __init__(self, state_shape, action_size):
+        self.state_shape = state_shape
+        self.action_size = action_size
+        self.memory = deque(maxlen=50000)
+        self.gamma = 0.95  # Discount rate
+        self.epsilon = 1.0  # Exploration rate
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        self.model = create_gru_model(state_shape, action_size)
+        self.target_model = create_gru_model(state_shape, action_size)
+        self.update_target_model()
+
+    def update_target_model(self):
+        """Copy weights to target model."""
+        self.target_model.set_weights(self.model.get_weights())
+
+    def remember(self, state, action, reward, next_state, done):
+        """Store experience in memory."""
+        self.memory.append((state, action, reward, next_state, done))
+
+    def act(self, state):
+        """Epsilon-greedy action selection."""
+        state = np.reshape(state, (1, 1, self.state_shape))  # ✅ Ensure 3D shape for LSTM
+        if np.random.rand() <= self.epsilon:
+            return random.randrange(self.action_size)
+        act_values = self.model.predict(state, verbose=0)
+        return np.argmax(act_values[0])
+
+    def replay(self, batch_size=32, callbacks=[]):
+        """Train on past experiences and use callbacks for logging and checkpointing."""
+        if len(self.memory) < batch_size:
+            return
+
+        # ✅ **Dynamically select minibatch size based on batch_size**
+        minibatch_size = min(len(self.memory), batch_size)
+        minibatch = random.sample(self.memory, minibatch_size)
+
+        train_batch_size = min(batch_size // 2, len(self.memory))  # ✅ Dynamic batch size
+
+        for state, action, reward, next_state, done in minibatch:
+            state = np.reshape(state, (1, 1, self.state_shape))  # ✅ Fix input shape
+            next_state = np.reshape(next_state, (1, 1, self.state_shape))  # ✅ Fix input shape
+
+            if done:
+                target = reward
+            else:
+                next_qs_max = np.amax(self.target_model.predict(next_state, verbose=0)[0])
+                target = reward + self.gamma * next_qs_max
+
+            target_f = self.model.predict(state, verbose=0)
+            target_f[0][action] = target
+
+            self.model.fit(state, target_f, epochs=1, verbose=0, batch_size=train_batch_size, callbacks=callbacks)
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+
+class TradingEnv(gym.Env):
+    """Trading environment for reinforcement learning with cumulative reward calculation."""
+
+    def __init__(self, scaled_data, orig_data, initial_investment=1_000):
+        super(TradingEnv, self).__init__()
+        self.orig_data = orig_data
+        self.data = scaled_data
+        self.initial_investment = initial_investment
+        self.trade_risk = 1 / 100  # Risk per trade
+        self.base_atr_stop_loss_dist = 2  # ATR-based stop-loss distance
+
+        self.current_step = 0
+        self.done = False
+        self.position = 0  # -1: short, 0: no position, 1: long
+        self.entry_price = 0
+        self.balance = initial_investment
+        self.asset_held = 0
+        self.stop_loss = None
+        self.max_balance = initial_investment
+        self.total_reward = 0  # ✅ Cumulative reward over the entire dataset
+        self.total_profit = 0  # ✅ Track cumulative profit
+
+        self.action_space = spaces.Discrete(4)  # 0: hold, 1: buy, 2: sell, 3: close
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf,
+                                            shape=(scaled_data.shape[1],),
+                                            dtype=np.float32)
+
+    def step(self, action):
+        """Executes a trade action and updates the environment with proper reward calculation."""
+        current_price = self.orig_data.iloc[self.current_step]['C']
+        current_low = self.orig_data.iloc[self.current_step]['L']
+        current_high = self.orig_data.iloc[self.current_step]['H']
+        atr_lower = self.orig_data.iloc[self.current_step]['atr_20']
+        atr_higher = self.orig_data.iloc[self.current_step]['atr_50']
+        transaction_cost = 0.055 / 100  # 0.055% per trade
+
+        realized_profit, floating_pnl = 0, 0
+        transaction_cost_amount = 0
+
+        # Check stop-loss condition
+        if self.position != 0 and self.stop_loss and self.current_step:
+            if ((self.position == 1 and current_low <= self.stop_loss) or
+                    (self.position == -1 and current_high >= self.stop_loss)):
+                realized_profit += self.close_position(self.stop_loss, transaction_cost)
+
+        # Execute trading actions
+        if action in [1, 2]:  # Buy (long) or Sell (short)
+            new_position = 1 if action == 1 else -1
+            if self.position != new_position:
+                realized_profit += self.close_position(current_price, transaction_cost)
+
+                stop_loss_distance = self.base_atr_stop_loss_dist * (atr_lower / atr_higher) * atr_lower
+                self.stop_loss = current_price - stop_loss_distance if action == 1 else current_price + stop_loss_distance
+
+                max_position_size = self.balance / current_price
+                position_size = (self.balance * self.trade_risk) / stop_loss_distance
+                position_size = min(max_position_size, position_size)
+
+                transaction_cost_amount = position_size * current_price * transaction_cost
+                self.asset_held = position_size
+                self.entry_price = current_price
+                self.position = new_position
+                self.balance -= transaction_cost_amount
+
+        elif action == 3:  # Close position
+            realized_profit += self.close_position(current_price, transaction_cost)
+
+        # Calculate Floating PnL
+        if self.position != 0:
+            floating_pnl = (current_price - self.entry_price) * self.asset_held if self.position == 1 else \
+                (self.entry_price - current_price) * self.asset_held
+
+        # Reward Calculation
+        step_reward = realized_profit  # - transaction_cost_amount
+        step_reward += floating_pnl * 0.1  # Small weight to floating PnL to encourage trend following
+        self.total_reward += step_reward  # ✅ Accumulate total episode reward
+
+        # Drawdown Penalty
+        self.max_balance = max(self.max_balance, self.balance)
+        drawdown = (self.max_balance - self.balance) / self.max_balance if self.max_balance > 0 else 0
+        self.total_reward -= drawdown * 0.5  # **Adjust penalty weight (0.5)**
+
+        # Get next state & end condition
+        next_state = self.data.iloc[min(self.current_step, len(self.data) - 1)]
+        self.current_step += 1
+        self.done = self.current_step >= len(self.data) - 1
+
+        # Step Logging
+        _logger.info(f"Step: {self.current_step}, Action: {action}, Position: {self.position}, "
+                     f"Current Price: {current_price}, Entry Price: {self.entry_price}, "
+                     f"Reward: {round(step_reward, 3)}, Profit: {round(realized_profit, 2)}, "
+                     f"Floating PnL: {round(floating_pnl, 2) if self.position != 0 else 0}, "
+                     f"Balance: {round(self.balance, 1)}, Drawdown: {round(drawdown, 5)}, Stop Loss: {self.stop_loss}")
+
+        return next_state, step_reward, self.done, {
+            'reward': round(step_reward, 3),
+            'profit': round(realized_profit, 2),  # ✅ **No total profit here**
+            'floating_pnl': round(floating_pnl, 2) if self.position != 0 else 0,
+            'balance': round(self.balance, 1),
+            'drawdown': round(drawdown, 5),
+            'stop_loss': self.stop_loss
+        }
+
+    def close_position(self, current_price, transaction_cost):
+        """Closes an open position and updates balance."""
+        if self.position == 0:
+            return 0
+
+        price_diff = (current_price - self.entry_price) if self.position == 1 else (self.entry_price - current_price)
+        profit = price_diff * self.asset_held
+        transaction_cost_amount = self.asset_held * current_price * transaction_cost
+        actual_profit = profit - transaction_cost_amount
+
+        self.balance += actual_profit
+        self.position = 0
+        self.entry_price = 0
+        self.asset_held = 0
+        self.stop_loss = None
+        return actual_profit
+
+    def reset(self):
+        """Resets the environment for a new episode."""
+        self.current_step = 0
+        self.done = False
+        self.position = 0
+        self.entry_price = 0
+        self.balance = self.initial_investment
+        self.max_balance = self.initial_investment
+        self.total_reward = 0  # ✅ Reset cumulative reward at the start of each episode
+        self.total_profit = 0  # ✅ Reset cumulative profit at the start of each episode
+        return self.data.iloc[self.current_step]
+
+
+class ModelTrainer:
+    def __init__(self, env, agent, model_suffix, resume=True):
+        """Initialize training with logging, callbacks, and model checkpointing."""
+        _logger.info(f"Num GPUs Available: {len(tf.config.experimental.list_physical_devices('GPU'))}")
+        tf.test.gpu_device_name()
+
+        self.env = env
+        self.agent = agent
+        self.model_suffix = model_suffix
+        self.checkpoint_filepath = f'models/model_checkpoint_{model_suffix}.weights.h5'
+
+        # Setup logging
+        log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=log_dir, histogram_freq=1, write_graph=True
+        )
+
+        # Ensure directory exists for model storage
+        os.makedirs("models", exist_ok=True)
+
+        # Setup model checkpointing
+        self.model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=self.checkpoint_filepath,
+            save_weights_only=True,
+            monitor='loss',
+            mode='min',
+            save_best_only=True
+        )
+
+        # Early stopping
+        self.early_stopping_callback = tf.keras.callbacks.EarlyStopping(
+            monitor='loss',
+            patience=10,
+            restore_best_weights=True
+        )
+
+        if resume and os.path.isfile(self.checkpoint_filepath):
+            _logger.info("Resuming from last checkpoint...")
+
+            # Ensure the dummy input matches the expected input shape
+            dummy_input = np.zeros((1, 1, self.env.observation_space.shape[0]))
+
+            # Explicitly call the model with the dummy input to build it
+            self.agent.model(dummy_input)  # This should ensure the GRU layer has been built
+
+            # Now load the weights after the model is confirmed to be built
+            self.agent.model.load_weights(self.checkpoint_filepath)
+
+    def train_agent(self, num_episodes=500, batch_size=32):
+        """Train the agent using LSTM-based DQN on full dataset."""
+
+        with tf.device('/GPU:0'):
+            for episode in range(num_episodes):
+                state = self.env.reset()
+                state = np.reshape(state, [1, 1, self.env.observation_space.shape[0]])  # ✅ Fix input shape
+
+                episode_reward, episode_profit = 0, 0
+                episode_sharpe_ratios, episode_max_drawdown = [], 0
+                episode_profitable_trades, episode_loss_trades = 0, 0
+
+                while not self.env.done:
+                    action = self.agent.act(state)
+                    next_state, reward, done, info = self.env.step(action)
+                    next_state = np.reshape(next_state,
+                                            [1, 1, self.env.observation_space.shape[0]])  # ✅ Fix input shape
+
+                    self.agent.remember(state, action, reward, next_state, done)
+                    state = next_state
+
+                    episode_reward += reward
+                    episode_profit += info['profit']
+
+                    # ✅ Track performance metrics
+                    episode_sharpe_ratios.append(info.get('sharpe_ratio', 0))
+                    episode_max_drawdown = max(episode_max_drawdown, info.get('drawdown', 0))
+
+                    if info['profit'] > 0:
+                        episode_profitable_trades += 1
+                    elif info['profit'] < 0:
+                        episode_loss_trades += 1
+
+                    # ✅ Replay experience buffer
+                    self.agent.replay(batch_size,
+                                      callbacks=[
+                                          self.tensorboard_callback,
+                                          self.model_checkpoint_callback,
+                                          self.early_stopping_callback]
+                                      )
+
+                    if done:
+                        _logger.info(f"Episode {episode}/{num_episodes}, Balance: {info['balance']}, "
+                                     f"Total Reward: {round(episode_reward, 1)}, Total Profit: {round(episode_profit, 1)}, "
+                                     f"Sharpe Ratio: {round(np.mean(episode_sharpe_ratios), 4)}, "
+                                     f"Max Drawdown: {round(episode_max_drawdown, 3)}, "
+                                     f"Profitable Trades: {episode_profitable_trades}, Loss Trades: {episode_loss_trades}")
+
+                        save_episode(
+                            episode=episode,
+                            balance=info['balance'],
+                            reward=episode_reward,
+                            profit=episode_profit,
+                            win_trades=episode_profitable_trades,
+                            loss_trades=episode_loss_trades,
+                            suffix=self.model_suffix
+                        )
+
+                        self.agent.model.save_weights(self.checkpoint_filepath)
+                        _logger.info(f"✅ Model checkpoint saved at {self.checkpoint_filepath}")
+
+                        break
+
+                if episode % 5 == 0:
+                    self.agent.update_target_model()
+
+        self.save_model()
+        return self.agent
+
+    def save_model(self):
+        """Save the trained model."""
+        model_path = f'models/lstm_trading_model_{self.model_suffix}.h5'
+        os.makedirs("models", exist_ok=True)
+        self.agent.model.save(model_path)
+        _logger.info(f"Model saved as {model_path}")
+
+
+if __name__ == '__main__':
+    # Load dataset
+    init_logging()
+    ticker, length_days, timeframe = 'BTC', 854, '1d'
+
     exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange('bybit')
     exchange_adapter.market = ticker
 
-    data, data_shape_len, groups_len = prepare_training_data(
-        exchange_adapter, ticker=ticker, days=length_days, timeframe=timeframe, group_by=groups
+    scaled_data, orig_data = prepare_training_data(
+        exchange=exchange_adapter, ticker=ticker, days=length_days, timeframe=timeframe
     )
 
     # Initialize environment and agent
-    env = TradingEnv(data_shape_len)
-    agent = DQNAgent(env.observation_space.shape[0], env.action_space.n)
+    env = TradingEnv(scaled_data, orig_data)
+    agent = LSTMDQNAgent(env.observation_space.shape[0], env.action_space.n)
 
-    # Train the agent
-    trained_agent = ModelTrainer(
-        data, groups_len, f'{ticker}_{length_days}_{timeframe}'
-    ).train_agent(env, agent)
-
-    # Save the trained model
-    timestamp = str(int(datetime.now().timestamp()))
-    save_model(trained_agent.model, model_name=f'training_model_{ticker}_{length_days}_{timeframe}')
-
-    # Ensure TensorFlow session is properly closed at the end
-    tf.keras.backend.clear_session()
-
-    # Later, to make predictions with new data:
-    # new_data = ... # your new data as a numpy array
-    # loaded_model = load_model()
-    # prediction = predict_new_data(loaded_model, new_data)
+    # Train model
+    trainer = ModelTrainer(env, agent, model_suffix="BTC_trader")
+    trained_agent = trainer.train_agent(num_episodes=5000, batch_size=32)
