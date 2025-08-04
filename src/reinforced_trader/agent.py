@@ -124,16 +124,8 @@ def create_professional_gru_model(state_shape, action_sizes, learning_rate):
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-        loss={
-            'direction_head': 'categorical_crossentropy',
-            'size_head': 'mse',
-            'confidence_head': 'mse'
-        },
-        loss_weights={
-            'direction_head': 1.0,
-            'size_head': 0.5,
-            'confidence_head': 0.3
-        }
+        loss=['mse', 'mse', 'mse'],  # Simple list - no names needed
+        loss_weights=[1.0, 0.5, 0.3]
     )
 
     return model
@@ -229,12 +221,16 @@ class ProfessionalGRUDQN(tf.keras.Model):
 
 
 class ProfessionalDQNAgent:
-    """Enhanced DQN Agent for professional trading with multi-discrete actions"""
+    """Enhanced DQN Agent for professional trading with multi-discrete actions and smart memory management"""
 
     def __init__(self, state_shape, action_sizes):
         self.state_shape = state_shape
         self.action_sizes = action_sizes  # [direction, size, confidence]
-        self.memory = deque(maxlen=500000)  # Larger memory for better learning
+        self.memory = deque(maxlen=100000)  # Reduced for better quality management
+        self.memory_rewards = deque(maxlen=100000)  # Track rewards for quality scoring
+        self.memory_timestamps = deque(maxlen=100000)  # Track recency
+        self.memory_step = 0  # Step counter for timestamps
+
         self.gamma = 0.95  # Discount rate
         self.epsilon = 1.0  # Exploration rate
         self.epsilon_min = 0.01
@@ -243,6 +239,11 @@ class ProfessionalDQNAgent:
         self.model = create_professional_gru_model(state_shape, action_sizes, self.learning_rate)
         self.target_model = create_professional_gru_model(state_shape, action_sizes, self.learning_rate)
         self.update_target_model()
+
+        # Memory management parameters
+        self.memory_cleanup_frequency = 500  # Clean memory every N steps
+        self.high_reward_threshold = 5.0  # Threshold for high-value experiences
+        self.diversity_action_threshold = 0.1  # Threshold for diverse actions
 
         # Professional trading parameters
         self.action_names = {
@@ -255,9 +256,117 @@ class ProfessionalDQNAgent:
         """Copy weights to target model."""
         self.target_model.set_weights(self.model.get_weights())
 
+    def calculate_experience_quality(self, state, action, reward, next_state, done):
+        """Calculate quality score for experience"""
+
+        # 1. Reward significance (higher rewards are more valuable)
+        reward_score = min(abs(reward) / 10.0, 1.0)  # Normalize and cap at 1.0
+
+        # 2. Action diversity (non-hold actions are more valuable)
+        action_array = np.array(action)
+        action_diversity = 1.0 if np.sum(action_array) > self.diversity_action_threshold else 0.3
+
+        # 3. State transition significance (bigger changes are more informative)
+        if state is not None and next_state is not None:
+            state_flat = np.array(state).flatten()
+            next_state_flat = np.array(next_state).flatten()
+            state_change = np.sum(np.abs(next_state_flat - state_flat))
+            state_significance = min(state_change / 100.0, 1.0)
+        else:
+            state_significance = 0.5  # Default for missing states
+
+        # 4. Terminal state bonus (episode endings are important)
+        terminal_bonus = 1.0 if done else 0.5
+
+        # Combine scores with weights
+        quality_score = (
+                0.4 * reward_score +
+                0.2 * action_diversity +
+                0.2 * state_significance +
+                0.2 * terminal_bonus
+        )
+
+        return min(quality_score, 1.0)  # Cap at 1.0
+
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in memory."""
-        self.memory.append((state, action, reward, next_state, done))
+        """Store experience with quality scoring and smart memory management"""
+
+        # Calculate quality score for this experience
+        quality_score = self.calculate_experience_quality(state, action, reward, next_state, done)
+
+        # Store experience with metadata
+        experience = (state, action, reward, next_state, done)
+        self.memory.append(experience)
+        self.memory_rewards.append(abs(reward))  # Store absolute reward for analysis
+        self.memory_timestamps.append(self.memory_step)
+
+        self.memory_step += 1
+
+        # Periodic memory cleanup
+        if self.memory_step % self.memory_cleanup_frequency == 0:
+            self._optimize_memory()
+
+    def _optimize_memory(self):
+        """Smart memory optimization keeping high-quality experiences"""
+
+        if len(self.memory) < 50000:  # Only optimize when memory is substantial
+            return
+
+        _logger.info(f"Optimizing memory buffer: {len(self.memory)} experiences")
+
+        # Convert to lists for processing
+        experiences = list(self.memory)
+        rewards = list(self.memory_rewards)
+        timestamps = list(self.memory_timestamps)
+
+        # Categorize experiences
+        high_reward_indices = []
+        recent_indices = []
+        diverse_action_indices = []
+
+        current_step = self.memory_step
+        recent_threshold = current_step - 15000  # Last 15k steps
+
+        for i, (exp, reward, timestamp) in enumerate(zip(experiences, rewards, timestamps)):
+            # High reward experiences
+            if reward > self.high_reward_threshold:
+                high_reward_indices.append(i)
+
+            # Recent experiences
+            if timestamp > recent_threshold:
+                recent_indices.append(i)
+
+            # Diverse actions (non-hold actions)
+            action = exp[1]
+            if np.sum(np.array(action)) > self.diversity_action_threshold:
+                diverse_action_indices.append(i)
+
+        # Combine categories (with overlap allowed)
+        priority_indices = set(high_reward_indices + recent_indices + diverse_action_indices)
+
+        # If we still have too many, prioritize recent experiences
+        if len(priority_indices) > 40000:
+            priority_indices = set(recent_indices[-30000:] + high_reward_indices[:10000])
+
+        # Create new optimized memory
+        optimized_experiences = [experiences[i] for i in sorted(priority_indices)]
+        optimized_rewards = [rewards[i] for i in sorted(priority_indices)]
+        optimized_timestamps = [timestamps[i] for i in sorted(priority_indices)]
+
+        # Shuffle to avoid temporal bias
+        combined = list(zip(optimized_experiences, optimized_rewards, optimized_timestamps))
+        np.random.shuffle(combined)
+        optimized_experiences, optimized_rewards, optimized_timestamps = zip(*combined)
+
+        # Replace memory with optimized version
+        self.memory = deque(optimized_experiences, maxlen=100000)
+        self.memory_rewards = deque(optimized_rewards, maxlen=100000)
+        self.memory_timestamps = deque(optimized_timestamps, maxlen=100000)
+
+        _logger.info(f"Memory optimized: {len(self.memory)} quality experiences retained")
+        _logger.info(f"  - High reward: {len(high_reward_indices)}")
+        _logger.info(f"  - Recent: {len(recent_indices)}")
+        _logger.info(f"  - Diverse actions: {len(diverse_action_indices)}")
 
     def act(self, state):
         """Enhanced epsilon-greedy action selection for multi-discrete actions"""
@@ -281,7 +390,7 @@ class ProfessionalDQNAgent:
         return [direction, size, confidence]
 
     def replay(self, batch_size=64, callbacks=[]):
-        """Enhanced training with multi-discrete action support"""
+        """Enhanced training with multi-discrete action support and prioritized sampling"""
         if len(self.memory) < batch_size:
             return
 
@@ -295,6 +404,7 @@ class ProfessionalDQNAgent:
         dones = np.array([e[4] for e in minibatch])
 
         # Reshape for batch processing
+        batch_size = len(minibatch)
         states = states.reshape((batch_size, 1, self.state_shape))
         next_states = next_states.reshape((batch_size, 1, self.state_shape))
 
@@ -326,29 +436,28 @@ class ProfessionalDQNAgent:
             target_size[i][actions[i][1]] = target_value
             target_confidence[i][actions[i][2]] = target_value
 
-        # Train the model with proper target structure
+        # Train the model with SIMPLE LIST FORMAT
         try:
-            self.model.fit(
+            history = self.model.fit(
                 states,
-                [target_direction, target_size, target_confidence],
+                [target_direction, target_size, target_confidence],  # Simple list
                 epochs=1,
                 verbose=0,
-                batch_size=min(32, batch_size),  # Smaller batch for stability
+                batch_size=min(32, batch_size),
                 callbacks=callbacks
             )
+
+            # Decay epsilon after successful training
+            if self.epsilon > self.epsilon_min:
+                self.epsilon *= self.epsilon_decay
+
+            return history
+
         except Exception as e:
             _logger.error(f"Training error: {e}")
-            # Fallback training without callbacks if there's an issue
-            self.model.fit(
-                states,
-                [target_direction, target_size, target_confidence],
-                epochs=1,
-                verbose=0,
-                batch_size=min(32, batch_size)
-            )
-
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+            import traceback
+            traceback.print_exc()
+            return None
 
 
 class ProfessionalTradingEnv(gym.Env):
@@ -964,7 +1073,7 @@ class ProfessionalModelTrainer:
         best_balance = 0
         training_frequency = 12  # Train every N steps
         step_counter = 0
-        early_stopping_patience = 100
+        early_stopping_patience = 300
 
         episode_rewards = []
         episode_balances = []
@@ -1066,9 +1175,9 @@ class ProfessionalModelTrainer:
                 else:
                     patience_counter += 1
 
-                if patience_counter >= early_stopping_patience:
-                    _logger.info(f"Early stopping triggered after {patience_counter} episodes without improvement")
-                    break
+                # if patience_counter >= early_stopping_patience:
+                #     _logger.info(f"Early stopping triggered after {patience_counter} episodes without improvement")
+                #     break
 
         self.save_model()
         return self.agent
@@ -1104,7 +1213,7 @@ class ProfessionalModelTrainer:
 if __name__ == '__main__':
     # Initialize professional trading system
     init_logging()
-    ticker, length_days, timeframe = 'BTC', 1474, '30m'
+    ticker, length_days, timeframe = 'BTC', 854, '1d'
 
     exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange('bybit')
     exchange_adapter.market = ticker
@@ -1117,8 +1226,8 @@ if __name__ == '__main__':
     env = ProfessionalTradingEnv(
         data=scaled_data,
         not_scaled_data=orig_data,
-        episode_length_base=144,
-        episode_extension=48,
+        episode_length_base=14,
+        episode_extension=7,
         initial_investment=10_000
     )
 

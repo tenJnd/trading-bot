@@ -12,6 +12,7 @@ global.env
 dockerfiles/*/*.env
 dockerfiles/*/*.env_bckp
 key_files/*
+src/reinforced_trader/logs/fit/
 
 # Distribution / packaging
 .Python
