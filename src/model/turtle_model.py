@@ -153,7 +153,7 @@ class AgentActions(TurtleBase):
 class EpisodesTraining(TurtleBase):
     __tablename__ = 'episodes_training'
 
-    episode_group = Column(String, primary_key=True)
+    episode_group = Column(Integer, primary_key=True)
     balance = Column(Float)
     total_reward = Column(Float)
     profit_closed_trades = Column(Float)
