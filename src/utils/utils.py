@@ -533,20 +533,39 @@ def calculate_indicators_for_llm_entry_validator(df):
 def calculate_indicators_for_nn_30m(df):
     df['volume_sma_7'] = calculate_sma(df, period=7, column='V')
     df['volume_sma_14'] = calculate_sma(df, period=14, column='V')
-    df['atr_24'] = calculate_atr(df, period=24)
-    df['atr_48'] = calculate_atr(df, period=48)
+    df['atr_20'] = calculate_atr(df, period=24)
+    df['atr_50'] = calculate_atr(df, period=48)
     df['sma_7'] = calculate_sma(df, period=7)
     df['sma_14'] = calculate_sma(df, period=14)
     df['sma_28'] = calculate_sma(df, period=28)
     df['sma_48'] = calculate_sma(df, period=48)
-    # df['rsi_14'] = calculate_rsi(df, period=14)
-    # df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
-    # df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
-    # df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
-    #     'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
-    # df['adx_24'] = calculate_adx(df, n_periods=24)
+    df['rsi_14'] = calculate_rsi(df, period=14)
+    df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
+    df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+    df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
+        'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
+    df['adx_24'] = calculate_adx(df, n_periods=24)
     df = calculate_regression_channels(df, length=100)
     df = calculate_fib_levels_rolling(df, depth=100)
+    return df
+
+
+def calculate_indicators_for_nn_4h(df):
+    df['volume_sma_10'] = calculate_sma(df, period=10, column='V')
+    df['volume_sma_50'] = calculate_sma(df, period=50, column='V')
+    df['atr_20'] = calculate_atr(df, period=20)
+    df['atr_50'] = calculate_atr(df, period=50)
+    df['sma_20'] = calculate_sma(df, period=20)
+    df['sma_50'] = calculate_sma(df, period=50)
+    df['sma_100'] = calculate_sma(df, period=100)
+    df['rsi_14'] = calculate_rsi(df, period=14)
+    df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
+    df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+    df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
+        'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
+    df['adx_20'] = calculate_adx(df, n_periods=20)
+    df = calculate_regression_channels(df, length=50)
+    df = calculate_fib_levels_rolling(df, depth=50)
     return df
 
 
