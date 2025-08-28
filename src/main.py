@@ -152,7 +152,8 @@ def shit_trade(exchange_id, enter, ticker, timeframe, side, standby_mode, risk):
 @cli.command(help='run LLM trading bot')
 @click.option('-exch', '--exchange_id', type=str, default='bybit')
 @click.option('-t', '--tickers', type=str, default=None)
-def llm_trade(exchange_id, tickers):
+@click.option('-tp', '--ticker-picker', is_flag=True, default=False)
+def llm_trade(exchange_id, tickers, ticker_picker):
     _logger.info("\n============== STARTING LLM TRADE SESSION ==============\n")
     if tickers:
         tickers = tickers.split(',')
@@ -168,13 +169,15 @@ def llm_trade(exchange_id, tickers):
                 strategy for strategy in strategy_settings
                 if strategy.ticker in tickers
             ]
-        else:
+        elif ticker_picker:
             # TickerPicker
             async_exchange_adapter = ExchangeFactory.get_async_exchange(
                 exchange_id, sub_account_id=strategy_settings[0].sub_account_id
             )
             llm_ticker_picker = LlmTickerPicker(async_exchange_adapter, strategy_settings)
             strategy_settings_filtered = llm_ticker_picker.llm_pick_tickers()
+        else:
+            strategy_settings_filtered = strategy_settings
 
         # Llm Trader for each picked ticker
         exchange_adapter: BaseExchangeAdapter = ExchangeFactory.get_exchange(
