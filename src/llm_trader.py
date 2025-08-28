@@ -160,7 +160,7 @@ class LlmTrader:
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
     df_tail_for_agent = 30
-    leverage = 2
+    leverage = LLM_TRADER_LEVERAGE
     margin = 0.1
     risk_per_trade = 0.01  # 1% risk per trade * leverage!! -> 2%
 
