@@ -14,7 +14,7 @@ from sqlalchemy import desc
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN, \
-    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD
+    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD, LLM_TRADER_LEVERAGE
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
