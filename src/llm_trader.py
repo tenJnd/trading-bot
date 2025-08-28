@@ -81,8 +81,8 @@ class ValidationError(Exception):
 
 
 class TraderModel(model_config.ModelConfig):
-    MODEL = 'gpt-4o'
-    MAX_TOKENS = 2000
+    MODEL = 'gpt-5-mini'
+    MAX_TOKENS = 8192
     CONTEXT_WINDOW = 8192
     TEMPERATURE = 0.2  # Keep outputs deterministic for scoring and ranking
     RESPONSE_TOKENS = 500  # Ensure response fits within limits
@@ -159,7 +159,7 @@ class LlmTrader:
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
-    df_tail_for_agent = 20
+    df_tail_for_agent = 30
     leverage = 2
     margin = 0.1
     risk_per_trade = 0.01  # 1% risk per trade * leverage!! -> 2%
@@ -538,15 +538,15 @@ class LlmTrader:
             _logger.info("No constrains, can call the agent...")
             return
 
-        if min_amount > max_amount:
-            raise ConditionVerificationError(f'min amount ({min_amount}) > '
-                                             f'max amount ({max_amount}, based on free capital)\n'
-                                             f'exiting llm trader w/ a call')
-
-        min_threshold = 150
-        if self._exchange.free_balance < min_threshold:
-            raise ConditionVerificationError(f'free balance is lower then '
-                                             f'min threshold: {min_threshold}')
+        # if min_amount > max_amount:
+        #     raise ConditionVerificationError(f'min amount ({min_amount}) > '
+        #                                      f'max amount ({max_amount}, based on free capital)\n'
+        #                                      f'exiting llm trader w/ a call')
+        #
+        # min_threshold = 150
+        # if self._exchange.free_balance < min_threshold:
+        #     raise ConditionVerificationError(f'free balance is lower then '
+        #                                      f'min threshold: {min_threshold}')
 
         _logger.info("No constrains, can call the agent...")
 
@@ -572,7 +572,7 @@ class LlmTrader:
         # Initialize error messages list
         error_messages = []
 
-        min_rr_ratio = 0.5
+        min_rr_ratio = 1
         rr_ratio = agent_action.rr_ratio(c_price)
         if rr_ratio < min_rr_ratio:
             error_messages.append(
