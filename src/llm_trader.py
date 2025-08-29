@@ -247,9 +247,12 @@ class LlmTrader:
         }
 
     def preprocess_open_interest(self, timeframe=None):
-        timeframe = timeframe if timeframe else self.strategy_settings.timeframe
-        oi = self._exchange.get_open_interest_hist(timeframe=timeframe)
-        return preprocess_oi(oi)
+        try:
+            timeframe = timeframe if timeframe else self.strategy_settings.timeframe
+            oi = self._exchange.get_open_interest_hist(timeframe=timeframe)
+            return preprocess_oi(oi)
+        except KeyError:
+            return None
 
     def get_current_funding_rate(self):
         fr = self._exchange.get_funding_rate()
@@ -260,6 +263,7 @@ class LlmTrader:
             simple_fr_dict['previous_funding_rate'] = fr.get('previousFundingRate', None)
             simple_fr_dict['previous_funding_timestamp'] = fr.get('previousFundingTimestamp', None)
             return simple_fr_dict
+        return simple_fr_dict
 
     def get_ohcl_data(self, buffer_days=None, timeframe=None):
         timeframe = timeframe if timeframe else self.strategy_settings.timeframe
