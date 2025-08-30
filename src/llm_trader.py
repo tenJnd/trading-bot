@@ -2,7 +2,7 @@ import json
 import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
-from typing import Dict
+from typing import Dict, Mapping, List, Any, Optional
 
 import pandas as pd
 from database_tools.adapters.postgresql import PostgresqlAdapter
@@ -75,6 +75,60 @@ def get_next_key(base_key):
         raise ValueError(f"No key exists after '{base_key}'")
 
     return next_key
+
+
+def merge_by_datetime_desc(
+    a: List[Dict[str, Any]],
+    b: List[Dict[str, Any]],
+    limit: int
+) -> List[Dict[str, Any]]:
+    """
+    Merge two lists of dicts by their 'datetime' key (newest first),
+    preserving per-list order for equal timestamps, and cap to `limit`.
+    """
+
+    def _to_dt(val) -> Optional[datetime]:
+        # Accept datetime, ISO-8601 string, or UNIX timestamp (int/float)
+        if isinstance(val, datetime):
+            return val
+        if isinstance(val, (int, float)):
+            try:
+                return datetime.fromtimestamp(val, tz=timezone.utc)
+            except Exception:
+                return None
+        if isinstance(val, str):
+            # Handle 'Z' suffix and ISO 8601
+            try:
+                return datetime.fromisoformat(val.replace("Z", "+00:00"))
+            except Exception:
+                return None
+        return None
+
+    # Ensure both lists are individually sorted DESC by datetime
+    a_sorted = sorted(a, key=lambda x: _to_dt(x.get("datetime")) or datetime.min)
+    b_sorted = sorted(b, key=lambda x: _to_dt(x.get("datetime")) or datetime.min)
+
+    # Linear merge (O(n)), stable for equal datetimes
+    i = j = 0
+    out: List[Dict[str, Any]] = []
+    while len(out) < limit and (i < len(a_sorted) or j < len(b_sorted)):
+        if i >= len(a_sorted):
+            out.append(b_sorted[j]); j += 1
+            continue
+        if j >= len(b_sorted):
+            out.append(a_sorted[i]); i += 1
+            continue
+
+        dt_a = _to_dt(a_sorted[i].get("datetime"))
+        dt_b = _to_dt(b_sorted[j].get("datetime"))
+
+        # Treat None as the oldest
+        if dt_b is None or (dt_a is not None and dt_a >= dt_b):
+            out.append(a_sorted[i]); i += 1
+        else:
+            out.append(b_sorted[j]); j += 1
+
+    return out
 
 
 class ValidationError(Exception):
@@ -162,7 +216,7 @@ class LlmTrader:
     llm_model_config = TraderModel
     df_tail_for_agent = 30
     leverage = LLM_TRADER_LEVERAGE
-    margin = 0.1
+    margin = 0.05
     risk_per_trade = 0.01  # 1% risk per trade * leverage!! -> 2%
 
     def __init__(self,
@@ -181,8 +235,7 @@ class LlmTrader:
             self.price_action_data = self.get_price_action_data()
             self.opened_positions = self.get_open_positions_data()
             self.opened_orders = self.get_open_orders_data()
-            self.trade_history = self.get_last_trade_data()
-            self.last_agent_output = self.get_last_agent_output()
+            self.agent_history = self.get_agent_history()
             self.exchange_settings = self.get_exchange_settings()
 
             self.llm_input_data = self.create_llm_input_dict()
@@ -205,33 +258,56 @@ class LlmTrader:
             'current_timestamp': int(datetime.now().timestamp()),
         }
 
-    def get_last_agent_output(self):
-        if self.opened_orders or self.opened_positions:
-            with self._database.session_manager() as session:
-                last_agent_action = (
-                    session.query(
-                        AgentActions.agent_output,
-                        AgentActions.timestamp_created,
-                        AgentActions.candle_timestamp
-                    )
-                    .filter(AgentActions.strategy_id == self.strategy_settings.id)
-                    .order_by(desc(AgentActions.timestamp_created))
-                    .first()  # Get the most recent record
-                )
-
-            # If there's no record, return None
-            if not last_agent_action:
-                return None
-        else:
+    def get_last_agent_output(self, n: int = 10):
+        """
+        Return the n most recent items as a list of flat dicts:
+        {<agent_output fields...>, 'datetime': ..., 'candle_timestamp': ...}
+        Returns None if no records (preserves previous behavior).
+        """
+        if not (self.opened_orders or self.opened_positions):
             return None
 
-        # Unpack the tuple and return as a dictionary
-        agent_output, timestamp_created, candle_timestamp = last_agent_action
-        return {
-            'agent_output': agent_output,  # JSON object
-            'timestamp': timestamp_created,  # Timestamp
-            'candle_timestamp': candle_timestamp
-        }
+        with self._database.session_manager() as session:
+            rows = (
+                session.query(
+                    AgentActions.agent_output.label('agent_output'),
+                    AgentActions.timestamp_created.label('timestamp_created'),
+                    AgentActions.candle_timestamp.label('candle_timestamp'),
+                )
+                .filter(AgentActions.strategy_id == self.strategy_settings.id)
+                .order_by(desc(AgentActions.timestamp_created))  # newest -> oldest
+                .limit(n)
+                .all()
+            )
+
+        if not rows:
+            return None
+
+        result = []
+        for row in rows:
+            payload = row.agent_output
+
+            # Normalize agent_output into a dict
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {'agent_output': payload}
+            elif payload is None:
+                payload = {}
+            elif not isinstance(payload, Mapping):
+                try:
+                    payload = dict(payload)
+                except Exception:
+                    payload = {'agent_output': payload}
+
+            d = {}
+            d.update(payload)  # merge agent_output fields first
+            d['datetime'] = row.timestamp_created
+            d['candle_timestamp'] = row.candle_timestamp
+            result.append(d)
+
+        return pd.DataFrame(result).to_dict('records')
 
     def get_exchange_settings(self):
         _logger.info("getting exchange settings...")
@@ -245,6 +321,14 @@ class LlmTrader:
             'total_capital': total_balance,
             'max_amount_based_on_free_capital': max_amount
         }
+
+    def get_agent_history(self):
+        actions = self.get_last_agent_output()
+        trades = self.get_last_trade_data()
+
+        merged = merge_by_datetime_desc(actions, trades, 10)
+        agent_history_csv = pd.DataFrame(merged).to_csv(index=False)
+        return agent_history_csv
 
     def preprocess_open_interest(self, timeframe=None):
         try:
@@ -341,8 +425,8 @@ class LlmTrader:
         th_df = pd.DataFrame(th)
         th_df_agg = aggregate_partial_closes(th_df)
         th_df_agg = th_df_agg.drop(['fee_rate', 'symbol'], axis=1)
-        th_df_agg_tail = th_df_agg.tail(5).to_csv(index=False)
-        return th_df_agg_tail
+        # th_df_agg_tail = th_df_agg.to_csv(index=False)
+        return th_df_agg.to_dict('records')
 
     @staticmethod
     def _calculate_indicators_for_llm_trader(df):
@@ -411,9 +495,7 @@ class LlmTrader:
             'price_data': self.price_action_data,
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
-            'last_trades': self.trade_history,
-            'last_agent_output': self.last_agent_output,
-            # 'exchange_settings': self.exchange_settings
+            'agent_history': self.agent_history,
         }
 
         return llm_input
@@ -543,15 +625,15 @@ class LlmTrader:
             _logger.info("No constrains, can call the agent...")
             return
 
-        # if min_amount > max_amount:
-        #     raise ConditionVerificationError(f'min amount ({min_amount}) > '
-        #                                      f'max amount ({max_amount}, based on free capital)\n'
-        #                                      f'exiting llm trader w/ a call')
-        #
-        # min_threshold = 150
-        # if self._exchange.free_balance < min_threshold:
-        #     raise ConditionVerificationError(f'free balance is lower then '
-        #                                      f'min threshold: {min_threshold}')
+        if min_amount > max_amount:
+            raise ConditionVerificationError(f'min amount ({min_amount}) > '
+                                             f'max amount ({max_amount}, based on free capital)\n'
+                                             f'exiting llm trader w/ a call')
+
+        min_threshold = 100
+        if self._exchange.free_balance < min_threshold:
+            raise ConditionVerificationError(f'free balance is lower then '
+                                             f'min threshold: {min_threshold}')
 
         _logger.info("No constrains, can call the agent...")
 
