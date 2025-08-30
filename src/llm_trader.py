@@ -77,18 +77,13 @@ def get_next_key(base_key):
     return next_key
 
 
-def merge_by_datetime_desc(
+def merge_natural_order(
     a: List[Dict[str, Any]],
     b: List[Dict[str, Any]],
-    limit: int
+    limit: int,
+    newest_on_top: bool = False,
 ) -> List[Dict[str, Any]]:
-    """
-    Merge two lists of dicts by their 'datetime' key (newest first),
-    preserving per-list order for equal timestamps, and cap to `limit`.
-    """
-
     def _to_dt(val) -> Optional[datetime]:
-        # Accept datetime, ISO-8601 string, or UNIX timestamp (int/float)
         if isinstance(val, datetime):
             return val
         if isinstance(val, (int, float)):
@@ -97,18 +92,17 @@ def merge_by_datetime_desc(
             except Exception:
                 return None
         if isinstance(val, str):
-            # Handle 'Z' suffix and ISO 8601
             try:
                 return datetime.fromisoformat(val.replace("Z", "+00:00"))
             except Exception:
                 return None
         return None
 
-    # Ensure both lists are individually sorted DESC by datetime
-    a_sorted = sorted(a, key=lambda x: _to_dt(x.get("datetime")) or datetime.min)
-    b_sorted = sorted(b, key=lambda x: _to_dt(x.get("datetime")) or datetime.min)
+    # Sort each input newest -> oldest so we can pick the newest `limit` items quickly.
+    a_sorted = sorted(a, key=lambda x: _to_dt(x.get("datetime")) or datetime.min, reverse=True)
+    b_sorted = sorted(b, key=lambda x: _to_dt(x.get("datetime")) or datetime.min, reverse=True)
 
-    # Linear merge (O(n)), stable for equal datetimes
+    # Linear merge to collect the newest `limit` items (newest-first).
     i = j = 0
     out: List[Dict[str, Any]] = []
     while len(out) < limit and (i < len(a_sorted) or j < len(b_sorted)):
@@ -121,13 +115,16 @@ def merge_by_datetime_desc(
 
         dt_a = _to_dt(a_sorted[i].get("datetime"))
         dt_b = _to_dt(b_sorted[j].get("datetime"))
-
-        # Treat None as the oldest
         if dt_b is None or (dt_a is not None and dt_a >= dt_b):
             out.append(a_sorted[i]); i += 1
         else:
             out.append(b_sorted[j]); j += 1
 
+    if newest_on_top:
+        return out
+
+    # Final pass: natural order (oldest -> newest) for readability.
+    out.sort(key=lambda x: _to_dt(x.get("datetime")) or datetime.min)
     return out
 
 
@@ -265,7 +262,7 @@ class LlmTrader:
         Returns None if no records (preserves previous behavior).
         """
         if not (self.opened_orders or self.opened_positions):
-            return None
+            return {}
 
         with self._database.session_manager() as session:
             rows = (
@@ -281,7 +278,7 @@ class LlmTrader:
             )
 
         if not rows:
-            return None
+            return {}
 
         result = []
         for row in rows:
@@ -305,6 +302,7 @@ class LlmTrader:
             d.update(payload)  # merge agent_output fields first
             d['datetime'] = row.timestamp_created
             d['candle_timestamp'] = row.candle_timestamp
+            d['entry_type'] = 'agent_action'
             result.append(d)
 
         return pd.DataFrame(result).to_dict('records')
@@ -326,9 +324,19 @@ class LlmTrader:
         actions = self.get_last_agent_output()
         trades = self.get_last_trade_data()
 
-        merged = merge_by_datetime_desc(actions, trades, 10)
-        agent_history_csv = pd.DataFrame(merged).to_csv(index=False)
-        return agent_history_csv
+        if actions and trades:
+            merged = merge_natural_order(actions, trades, 10)
+            if merged:
+                agent_history_csv = pd.DataFrame(merged).to_csv(index=False)
+                return agent_history_csv
+            else:
+                return {}
+        elif actions:
+            return pd.DataFrame(actions).to_csv(index=False)
+        elif trades:
+            return pd.DataFrame(trades).to_csv(index=False)
+        else:
+            return {}
 
     def preprocess_open_interest(self, timeframe=None):
         try:
@@ -416,15 +424,16 @@ class LlmTrader:
     def get_last_trade_data(self):
         th = self._exchange.get_trade_history()
         if not th:
-            return None
+            return {}
 
         th = self._exchange.aggregate_trades(th)
         if not th:
-            return None
+            return {}
 
         th_df = pd.DataFrame(th)
         th_df_agg = aggregate_partial_closes(th_df)
         th_df_agg = th_df_agg.drop(['fee_rate', 'symbol'], axis=1)
+        th_df_agg['entry_type'] = 'trade_result'
         # th_df_agg_tail = th_df_agg.to_csv(index=False)
         return th_df_agg.to_dict('records')
 
