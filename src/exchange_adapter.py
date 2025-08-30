@@ -2,7 +2,7 @@ import asyncio
 import logging
 import traceback
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import ccxt
 import ccxt.async_support as accxt  # Async CCXT
@@ -398,7 +398,10 @@ class BaseExchangeAdapter:
             price = trade['price']
             fee = trade.get('fee', {}).get('cost', 0)
             fee_rate = trade.get('fee', {}).get('rate', 0)
-            datetime_str = trade['datetime']  # Trade datetime
+            datetime_str = datetime.strptime(
+                trade['datetime'],
+                '%Y-%m-%dT%H:%M:%S.%fZ'
+            ).replace(tzinfo=timezone.utc)  # Trade datetime
 
             if side == 'sell':  # Closing a long or opening a short
                 while qty > 1e-8 and open_positions:
