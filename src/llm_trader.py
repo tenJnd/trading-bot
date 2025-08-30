@@ -261,9 +261,6 @@ class LlmTrader:
         {<agent_output fields...>, 'datetime': ..., 'candle_timestamp': ...}
         Returns None if no records (preserves previous behavior).
         """
-        if not (self.opened_orders or self.opened_positions):
-            return {}
-
         with self._database.session_manager() as session:
             rows = (
                 session.query(
@@ -305,7 +302,10 @@ class LlmTrader:
             d['entry_type'] = 'agent_action'
             result.append(d)
 
-        return pd.DataFrame(result).to_dict('records')
+        df = pd.DataFrame(result)
+        df = df.drop(columns=['data'])
+
+        return df.to_dict('records')
 
     def get_exchange_settings(self):
         _logger.info("getting exchange settings...")
