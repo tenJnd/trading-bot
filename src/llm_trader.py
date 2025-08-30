@@ -650,7 +650,13 @@ class LlmTrader:
         # Calculate the potential risk per trade
         move_against = abs(agent_action.stop_loss - c_price)
         free_balance = self._exchange.free_balance * (1 - self.margin)
-        trade_risk_cap = free_balance * self.risk_per_trade
+
+        # since we calculate risk amount from free capital
+        # we want to raise risk per trade when we have less free capital
+        # example: total bal = 500, free bal = 250 -> we raise risk per trade by 2.5x (in the next step)
+        free_balance_to_total_balance = self._exchange.total_balance / free_balance
+
+        trade_risk_cap = free_balance * (self.risk_per_trade * free_balance_to_total_balance)
 
         # if the stop-loss is too tight, the amount will exes free capital.
         # -> we need to assign raw amount to max amount based on free capital
