@@ -255,7 +255,7 @@ class LlmTrader:
             'current_timestamp': int(datetime.now().timestamp()),
         }
 
-    def get_last_agent_output(self, n: int = 10):
+    def get_last_agent_output(self, n: int = 20):
         """
         Return the n most recent items as a list of flat dicts:
         {<agent_output fields...>, 'datetime': ..., 'candle_timestamp': ...}
@@ -325,7 +325,7 @@ class LlmTrader:
         trades = self.get_last_trade_data()
 
         if actions and trades:
-            merged = merge_natural_order(actions, trades, 10)
+            merged = merge_natural_order(actions, trades, 20)
             if merged:
                 agent_history_csv = pd.DataFrame(merged).to_csv(index=False)
                 return agent_history_csv
