@@ -116,6 +116,9 @@ ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD = int(os.environ.get('ACCEPTABLE_ROUNDING_
 APP_SETTINGS = os.environ.get("APP_SETTINGS", "DevConfig")
 
 LLM_TRADER_LEVERAGE = int(os.environ.get('LLM_TRADER_LEVERAGE', 2))
+LLM_MARGIN = float(os.environ.get('LLM_MARGIN', 0.03))
+LLM_RISK_PER_TRADE = float(os.environ.get('LLM_RISK_PER_TRADE', 0.01))
+LLM_DATA_TAIL = int(os.environ.get('LLM_DATA_TAIL', 30))
 
 
 class Config:

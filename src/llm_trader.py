@@ -14,7 +14,7 @@ from sqlalchemy import desc
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN, \
-    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD, LLM_TRADER_LEVERAGE
+    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD, LLM_TRADER_LEVERAGE, LLM_DATA_TAIL, LLM_MARGIN, LLM_RISK_PER_TRADE
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
@@ -211,10 +211,10 @@ class LlmTrader:
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
     llm_model_config = TraderModel
-    df_tail_for_agent = 30
+    df_tail_for_agent = LLM_DATA_TAIL
     leverage = LLM_TRADER_LEVERAGE
-    margin = 0.05
-    risk_per_trade = 0.01  # 1% risk per trade * leverage!! -> 2%
+    margin = LLM_MARGIN
+    risk_per_trade = LLM_RISK_PER_TRADE  # 1% risk per trade * leverage!! -> 2%
 
     def __init__(self,
                  exchange: BaseExchangeAdapter,
