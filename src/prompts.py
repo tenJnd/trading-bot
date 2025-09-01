@@ -25,7 +25,7 @@ Your goals:
 - **Short**: Open/add (pyramiding) to a short position. Specify `order_type` as `market` or `limit`. Provide stop-loss, and optionally take-profit. For `limit` orders, provide `entry_price`.
 - **Close**: Close a position. Use this when the position no longer aligns with market conditions, when taking profit, or when exit levels (e.g., take-profit or stop-loss) are no longer valid.
 - **Cancel**: Cancel unfilled limit orders that no longer align with the strategy. Provide **order_id**.
-- **Update stop-loss**: Modify the stop-loss of an **existing position** to adapt to changing market conditions. Use this to lock in profits by trailing the stop-loss. Provide **stop_loss** and order **id**. Only use when the current stop-loss level is significantly misaligned or suboptimal.
+- **Update stop-loss**: Modify the stop-loss of an **existing position** to adapt to changing market conditions. Provide **stop_loss** and order **id**. Only use when the current stop-loss level is significantly misaligned or suboptimal.
 - **Update take-profit**: Modify take-profit of an **existing position** to adapt to changing market conditions. Use this to adjust take-profit levels to capitalize on strong market movements. Provide **take_profit** and order **id**. Only use when the current take-profit level is significantly misaligned or suboptimal.
 - **Hold**: Take no action when the market lacks clarity, when position levels are still valid, or when no updates are needed for open orders or positions.
 
