@@ -174,7 +174,7 @@ class BaseExchangeAdapter:
         # Convert the list of candles to a DataFrame
         if all_candles:
             candles_df = pd.DataFrame(all_candles, columns=['timeframe', 'O', 'H', 'L', 'C', 'V'])
-            candles_df['datetime'] = pd.to_datetime(candles_df['timeframe'], unit='ms')
+            candles_df['datetime'] = pd.to_datetime(candles_df['timeframe'], unit='ms', utc=True)
 
         return candles_df
 
