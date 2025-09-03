@@ -252,7 +252,7 @@ class LlmTrader:
         return {
             'candle_timeframe': timeframe,
             'candle_timestamp': last_candle_timestamp,
-            'current_timestamp': int(datetime.now().timestamp()),
+            'current_timestamp': pd.Timestamp.now(tz='UTC')
         }
 
     def get_last_agent_output(self, n: int = 20):

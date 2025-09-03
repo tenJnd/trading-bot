@@ -500,8 +500,63 @@ def shorten_large_numbers(df, column_name):
     return df
 
 
+def add_live_bar_time_features(df):
+    """
+    Assumes `time_col` holds epoch ms integers.
+    Adds columns:
+      is_live_bar, bar_elapsed_s, bar_progress, volume_rate,
+      est_fullbar_volume, vol_rate_vs_avg, datetime (UTC)
+    """
+    if len(df) == 0:
+        return df
+
+    # 2) Mark live bar (last row)
+    df['is_live_bar'] = False
+    df.loc[df.index[-1], 'is_live_bar'] = True
+
+    # 3) Infer timeframe seconds (robust median of diffs)
+    time_deltas = df['datetime'].diff().dropna()
+    if not time_deltas.empty:
+        timeframe_seconds = int(time_deltas.dt.total_seconds().median())
+    else:
+        # Fallback if only one row; we can’t infer the frame
+        timeframe_seconds = 0
+
+    # Initialize outputs
+    df['bar_elapsed_s'] = 0.0
+    df['bar_progress'] = 0.0
+    # df['volume_rate'] = np.nan
+    # df['est_fullbar_volume'] = np.nan
+    # df['vol_rate_vs_avg'] = np.nan
+
+    # 4) Compute live-bar features only if we have a valid frame
+    if df.iloc[-1]['is_live_bar'] and timeframe_seconds > 0:
+        last_open_time = df.iloc[-1]['datetime']  # tz-aware (UTC)
+        now_utc = pd.Timestamp.now(tz='UTC')  # tz-aware (UTC)
+
+        elapsed = (now_utc - last_open_time).total_seconds()
+        # Clamp to [0, timeframe_seconds]
+        elapsed = max(0.0, min(elapsed, float(timeframe_seconds)))
+
+        prog = max(1e-6, min(elapsed / float(timeframe_seconds), 0.999))
+
+        df.loc[df.index[-1], 'bar_elapsed_s'] = round(elapsed, 0)
+        df.loc[df.index[-1], 'bar_progress'] = round(prog, 3)
+
+        # V = float(df.iloc[-1]['V'])
+        # df.loc[df.index[-1], 'volume_rate'] = V / max(elapsed, 1e-6)
+        # df.loc[df.index[-1], 'est_fullbar_volume'] = V / prog
+        #
+        # if 'volume_sma_20' in df.columns and df.iloc[-1]['volume_sma_20'] not in (0, np.nan):
+        #     df.loc[df.index[-1], 'vol_rate_vs_avg'] = (
+        #         df.iloc[-1]['est_fullbar_volume'] / df.iloc[-1]['volume_sma_20']
+        #     )
+
+    return df
+
+
 def calculate_indicators_for_llm_trader(df):
-    df['volume_sma_10'] = calculate_sma(df, period=10, column='V')
+    # df['volume_sma_10'] = calculate_sma(df, period=10, column='V')
     df['volume_sma_20'] = calculate_sma(df, period=20, column='V')
     df['atr_20'] = calculate_atr(df, period=20)
     # df['atr_50'] = calculate_atr(df, period=50)
@@ -511,8 +566,8 @@ def calculate_indicators_for_llm_trader(df):
     df['sma_100'] = calculate_sma(df, period=100)
     # df['vol_sma_20'] = calculate_sma(df, period=20, column='V')
     # df['vol_sma_50'] = calculate_sma(df, period=50, column='V')
-    df['rsi_14'] = calculate_rsi(df, period=14)
-    df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
+    # df['rsi_14'] = calculate_rsi(df, period=14)
+    # df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
     df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
     df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
         'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
@@ -520,6 +575,8 @@ def calculate_indicators_for_llm_trader(df):
     df['adx_20'] = calculate_adx(df, n_periods=20)
     # df['obv'] = round_series(calculate_obv(df), 0)
     # df['obv_sma_20'] = round_series(calculate_sma(df, period=20, column='obv'), 0)
+    df = add_live_bar_time_features(df)
+
     return df
 
 
