@@ -61,6 +61,22 @@ def aggregate_partial_closes(trades_df):
     return grouped
 
 
+def normalize_agent_output_from_db(payload):
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            payload = {'agent_output': payload}
+    elif payload is None:
+        payload = {}
+    elif not isinstance(payload, Mapping):
+        try:
+            payload = dict(payload)
+        except Exception:
+            payload = {'agent_output': payload}
+    return payload
+
+
 def get_next_key(base_key):
     # Convert the keys to a list
     keys = list(PERIODS.keys())
@@ -78,10 +94,10 @@ def get_next_key(base_key):
 
 
 def merge_natural_order(
-    a: List[Dict[str, Any]],
-    b: List[Dict[str, Any]],
-    limit: int,
-    newest_on_top: bool = False,
+        a: List[Dict[str, Any]],
+        b: List[Dict[str, Any]],
+        limit: int,
+        newest_on_top: bool = False,
 ) -> List[Dict[str, Any]]:
     def _to_dt(val) -> Optional[datetime]:
         if isinstance(val, datetime):
@@ -107,18 +123,22 @@ def merge_natural_order(
     out: List[Dict[str, Any]] = []
     while len(out) < limit and (i < len(a_sorted) or j < len(b_sorted)):
         if i >= len(a_sorted):
-            out.append(b_sorted[j]); j += 1
+            out.append(b_sorted[j]);
+            j += 1
             continue
         if j >= len(b_sorted):
-            out.append(a_sorted[i]); i += 1
+            out.append(a_sorted[i]);
+            i += 1
             continue
 
         dt_a = _to_dt(a_sorted[i].get("datetime"))
         dt_b = _to_dt(b_sorted[j].get("datetime"))
         if dt_b is None or (dt_a is not None and dt_a >= dt_b):
-            out.append(a_sorted[i]); i += 1
+            out.append(a_sorted[i]);
+            i += 1
         else:
-            out.append(b_sorted[j]); j += 1
+            out.append(b_sorted[j]);
+            j += 1
 
     if newest_on_top:
         return out
@@ -232,6 +252,7 @@ class LlmTrader:
             self.price_action_data = self.get_price_action_data()
             self.opened_positions = self.get_open_positions_data()
             self.opened_orders = self.get_open_orders_data()
+            self.last_agent_output = self.get_last_agent_output()
             self.agent_history = self.get_agent_history()
             self.exchange_settings = self.get_exchange_settings()
 
@@ -255,7 +276,31 @@ class LlmTrader:
             'current_timestamp': pd.Timestamp.now(tz='UTC')
         }
 
-    def get_last_agent_output(self, n: int = 20):
+    def get_last_agent_output(self):
+        with self._database.session_manager() as session:
+            last_agent_action = (
+                session.query(
+                    AgentActions.agent_output,
+                    AgentActions.timestamp_created,
+                    AgentActions.candle_timestamp
+                )
+                .filter(AgentActions.strategy_id == self.strategy_settings.id)
+                .order_by(desc(AgentActions.timestamp_created))
+                .first()  # Get the most recent record
+            )
+
+        # If there's no record, return None
+        if not last_agent_action:
+            return {}
+
+        # Unpack the tuple and return as a dictionary
+        agent_output, timestamp_created, candle_timestamp = last_agent_action
+        result_dict = normalize_agent_output_from_db(agent_output)
+        result_dict['timestamp_created'] = timestamp_created
+        result_dict['candle_timestamp'] = candle_timestamp
+        return result_dict
+
+    def get_agent_nonhold_action_history(self, n: int = 20):
         """
         Return the n most recent items as a list of flat dicts:
         {<agent_output fields...>, 'datetime': ..., 'candle_timestamp': ...}
@@ -269,6 +314,7 @@ class LlmTrader:
                     AgentActions.candle_timestamp.label('candle_timestamp'),
                 )
                 .filter(AgentActions.strategy_id == self.strategy_settings.id)
+                .filter(AgentActions.action != 'hold')
                 .order_by(desc(AgentActions.timestamp_created))  # newest -> oldest
                 .limit(n)
                 .all()
@@ -281,19 +327,7 @@ class LlmTrader:
         for row in rows:
             payload = row.agent_output
 
-            # Normalize agent_output into a dict
-            if isinstance(payload, str):
-                try:
-                    payload = json.loads(payload)
-                except Exception:
-                    payload = {'agent_output': payload}
-            elif payload is None:
-                payload = {}
-            elif not isinstance(payload, Mapping):
-                try:
-                    payload = dict(payload)
-                except Exception:
-                    payload = {'agent_output': payload}
+            payload = normalize_agent_output_from_db(payload)
 
             d = {}
             d.update(payload)  # merge agent_output fields first
@@ -321,7 +355,7 @@ class LlmTrader:
         }
 
     def get_agent_history(self):
-        actions = self.get_last_agent_output()
+        actions = self.get_agent_nonhold_action_history()
         trades = self.get_last_trade_data()
 
         if actions and trades:
@@ -505,6 +539,7 @@ class LlmTrader:
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
             'agent_history': self.agent_history,
+            'last_agent_action': self.last_agent_output
         }
 
         return llm_input
@@ -795,7 +830,7 @@ class LlmTrader:
                 f"strategy_id: {self.strategy_settings.id}\n"
                 f"{agent_action.nice_print()}")
 
-    def process_non_hold_action(self, agent_action):
+    def process_action(self, agent_action):
         order = None
         if agent_action.is_entry:
             agent_action = self.calculate_amount(agent_action)
@@ -825,7 +860,11 @@ class LlmTrader:
                 take_profit=agent_action.take_profit)
 
         self.save_agent_action(agent_action, order)
-        _notifier.info(f':bangbang: {self.format_log(agent_action)}', echo='here')
+
+        if agent_action.is_hold:
+            _notifier.info(self.format_log(agent_action))
+        else:
+            _notifier.info(f':bangbang: {self.format_log(agent_action)}', echo='here')
 
     def trade(self):
         try:
@@ -841,11 +880,7 @@ class LlmTrader:
             return
 
         for agent_action in agent_actions:
-            if agent_action.is_hold:
-                _notifier.info(self.format_log(agent_action))
-            else:
-                self.process_non_hold_action(agent_action)
-
+            self.process_action(agent_action)
             _logger.info(self.format_log(agent_action))
 
     def save_agent_action(self, agent_action: AgentAction, order=None):
@@ -935,16 +970,6 @@ class LlmTurtlePyramidValidator(LlmTrader):
                 }
             }
         ]
-
-    def get_last_agent_output(self):
-        ao = super().get_last_agent_output()
-        if not ao:
-            return None
-
-        agent_action_dict: Dict[str, str] = ao['agent_output']
-        ao['agent_output'] = {k: v for k, v in agent_action_dict.items()
-                              if k in ['action', 'rationale', 'stop_loss']}
-        return ao
 
 
 class LlmTurtleEntryValidator(LlmTurtlePyramidValidator):

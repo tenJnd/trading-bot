@@ -749,7 +749,7 @@ def preprocess_oi(oi_df):
         keep_cols = ['timestamp', 'open_interest']
         oi_df['open_interest'] = round_series(oi_df['openInterestValue'], 0)
         oi_df = oi_df[keep_cols]
-        oi_df['open_interest_sma_20'] = calculate_sma(oi_df, 20, column='open_interest')
+        # oi_df['open_interest_sma_20'] = calculate_sma(oi_df, 20, column='open_interest')
         oi_df['open_interest_sma_10'] = calculate_sma(oi_df, 10, column='open_interest')
         oi_df.set_index('timestamp', inplace=True)
         return oi_df

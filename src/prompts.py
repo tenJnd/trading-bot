@@ -59,6 +59,7 @@ You can generate a **list of actions** when multiple steps are needed to execute
      - **lower timeframe**: Includes:
        - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
        - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., Volume MA, ATR, SMA, RSI, MACD, BB, OI, Regression channel etc.).
+       Keep in mind that **volume is cumulative within a live candle and can appear thin at the start**.
        - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
      - **higher timeframe**: Includes:
        - Same data structure as the lower timeframe but used only for broader context (e.g., trend confirmation, key levels).
@@ -68,7 +69,9 @@ You can generate a **list of actions** when multiple steps are needed to execute
 4. **Agent history (if provided)**:
    - The last 10 agent actions (excluding 'hold' actions) and actual trade results combined (ordered chronologically).
    This gives you the info how your decisions resulted. Learn from this info.
-5. **Previous Error Agent Output (if provided)**:
+5. **The last agent action**
+    - The very last agent action including 'hold'
+6. **Previous Error Agent Output (if provided)**:
    - Includes **validation_error** and **required_correction** for refining decisions.
 
 ---
