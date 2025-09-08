@@ -62,8 +62,11 @@ You can generate a **list of actions** when multiple steps are needed to execute
    - **Price Data**: A dictionary containing data for multiple timeframes:
      - **lower timeframe**: Includes:
        - **Timing Info**: Information about the evaluation timing (e.g., `current_timestamp`, `candle_timestamp`, `candle_timeframe`).
-       - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators (e.g., Volume MA, ATR, SMA, RSI, MACD, BB, OI, Regression channel etc.).
-       Keep in mind that **volume is cumulative within a live candle and can appear thin at the start**.
+       - **Price and Indicators**: A CSV-formatted string with OHLCV data and calculated indicators 
+          (e.g., Volume MA, ATR, SMA, RSI, MACD, BB, OI, Regression channel etc.). 
+          The last row represents the **live candle**: volume there is cumulative and may appear thin 
+          early in the bar. Use `bar_progress`, `est_fullbar_volume`, or `vol_rate_vs_avg` (if provided) 
+          to assess live-bar participation. Do not assume weak momentum solely from raw live volume.
        - **Fibonacci Levels**: A dictionary of Fibonacci retracement levels (`fib_levels`).
      - **higher timeframe**: Includes:
        - Same data structure as the lower timeframe but used only for broader context (e.g., trend confirmation, key levels).

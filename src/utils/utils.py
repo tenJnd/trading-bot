@@ -525,9 +525,9 @@ def add_live_bar_time_features(df):
     # Initialize outputs
     df['bar_elapsed_s'] = 0.0
     df['bar_progress'] = 0.0
-    # df['volume_rate'] = np.nan
-    # df['est_fullbar_volume'] = np.nan
-    # df['vol_rate_vs_avg'] = np.nan
+    df['volume_rate'] = np.nan
+    df['est_fullbar_volume'] = np.nan
+    df['vol_rate_vs_avg'] = np.nan
 
     # 4) Compute live-bar features only if we have a valid frame
     if df.iloc[-1]['is_live_bar'] and timeframe_seconds > 0:
@@ -543,14 +543,18 @@ def add_live_bar_time_features(df):
         df.loc[df.index[-1], 'bar_elapsed_s'] = round(elapsed, 0)
         df.loc[df.index[-1], 'bar_progress'] = round(prog, 3)
 
-        # V = float(df.iloc[-1]['V'])
-        # df.loc[df.index[-1], 'volume_rate'] = V / max(elapsed, 1e-6)
-        # df.loc[df.index[-1], 'est_fullbar_volume'] = V / prog
-        #
-        # if 'volume_sma_20' in df.columns and df.iloc[-1]['volume_sma_20'] not in (0, np.nan):
-        #     df.loc[df.index[-1], 'vol_rate_vs_avg'] = (
-        #         df.iloc[-1]['est_fullbar_volume'] / df.iloc[-1]['volume_sma_20']
-        #     )
+        V = float(df.iloc[-1]['V'])
+        df.loc[df.index[-1], 'volume_rate'] = V / max(elapsed, 1e-6)
+        df.loc[df.index[-1], 'est_fullbar_volume'] = V / prog
+
+        if 'volume_sma_20' in df.columns and df.iloc[-1]['volume_sma_20'] not in (0, np.nan):
+            df.loc[df.index[-1], 'vol_rate_vs_avg'] = (
+                df.iloc[-1]['est_fullbar_volume'] / df.iloc[-1]['volume_sma_20']
+            )
+
+        df['volume_rate'] = round_series(df['volume_rate'], 2)
+        df['est_fullbar_volume'] = round_series(df['est_fullbar_volume'], 2)
+        df['vol_rate_vs_avg'] = round_series(df['vol_rate_vs_avg'], 2)
 
     return df
 
