@@ -472,6 +472,22 @@ class LlmTrader:
         return th_df_agg.to_dict('records')
 
     @staticmethod
+    def build_live_row_and_history(merged_df):
+        cols_history_to_drop = [
+            'bar_elapsed_s',
+            'bar_progress',
+            'volume_rate',
+            'est_fullbar_volume',
+            'vol_rate_vs_avg'
+        ]
+
+        live_row = merged_df.iloc[-1].to_dict()
+        history_df = merged_df.iloc[:-1]
+        history_df = history_df.drop(cols_history_to_drop, axis=1)
+
+        return history_df, live_row
+
+    @staticmethod
     def _calculate_indicators_for_llm_trader(df):
         return calculate_indicators_for_llm_trader(df)
 
@@ -495,15 +511,16 @@ class LlmTrader:
         if oi is not None:
             merged_df = pd.merge(df, oi, how='outer', left_index=True, right_index=True)
 
-        # merged_df = merged_df.drop(['datetime'], axis=1)
-        df_tail = merged_df.tail(self.df_tail_for_agent)
+        history_df, live_row = self.build_live_row_and_history(merged_df)
+        df_tail = history_df.tail(self.df_tail_for_agent)
         price_data_csv = df_tail.to_csv()
 
         timing_data = self.get_timing_info(timeframe, last_candle_timestamp)
 
         return {
             'timing_info': timing_data,
-            'price_and_indicators': price_data_csv,
+            'price_and_indicators_history': price_data_csv,
+            "live_snapshot": live_row,
             'fib_levels': fib_dict,
             # 'closest_fair_value_gaps_levels': fvg_dict,
         }
