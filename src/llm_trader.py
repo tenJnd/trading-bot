@@ -478,7 +478,7 @@ class LlmTrader:
             'bar_progress',
             'volume_rate',
             'est_fullbar_volume',
-            'vol_rate_vs_avg'
+            'est_vol_rate_vs_avg'
         ]
 
         live_row = merged_df.iloc[-1].to_dict()
