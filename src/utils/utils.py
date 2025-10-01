@@ -195,6 +195,87 @@ def calculate_macd(df, short_period=12, long_period=26, signal_period=9, column=
     return macd_line_rounded, signal_line_rounded
 
 
+def calculate_macd_cross_signal(
+        df: pd.DataFrame,
+        price_col: str = "C",
+        fast_length: int = 8,
+        slow_length: int = 16,
+        signal_length: int = 11,
+        prefix: str = "macd",
+        inplace: bool = True,
+) -> pd.DataFrame:
+    """
+    Add Pine-style MACD columns to a DataFrame.
+
+    Pine logic replicated:
+      - fastEMA = EMA(price, fast_length)
+      - slowEMA = EMA(price, slow_length)
+      - macd    = fastEMA - slowEMA
+      - signal  = SMA(macd, signal_length)   # NOTE: SMA (not EMA), per Pine snippet
+      - cross_up   = macd crosses above signal on this bar
+      - cross_down = macd crosses below signal on this bar
+      - pos = 1 if signal < macd, -1 if signal > macd, else carry previous (start=0)
+
+    Columns added (using `prefix`):
+      - {prefix}               : MACD line
+      - {prefix}_signal        : Signal line (SMA of MACD)
+      - {prefix}_cross_up      : Boolean crossover flag
+      - {prefix}_cross_down    : Boolean crossunder flag
+      - {prefix}_pos           : Persistent regime flag (-1, 0, 1)
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame containing a price column.
+    price_col : str, default "C"
+        Column name with prices.
+    fast_length : int, default 8
+    slow_length : int, default 16
+    signal_length : int, default 11
+    prefix : str, default "macd"
+        Prefix for output columns.
+    inplace : bool, default True
+        If True, mutate `df`. If False, return a copy.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with added MACD columns.
+    """
+    if not inplace:
+        df = df.copy()
+
+    price = df[price_col].astype(float)
+
+    # EMAs (adjust=False to match trading platforms)
+    fast_ema = price.ewm(span=fast_length, adjust=False).mean()
+    slow_ema = price.ewm(span=slow_length, adjust=False).mean()
+
+    macd = fast_ema - slow_ema
+
+    # Pine snippet used SMA for the signal line
+    signal = macd.rolling(window=signal_length, min_periods=signal_length).mean()
+
+    diff = macd - signal
+
+    # Crossovers (mirror Pine's crossover/crossunder)
+    cross_up = (diff > 0) & (diff.shift(1) <= 0)
+    cross_down = (diff < 0) & (diff.shift(1) >= 0)
+
+    # Persistent pos: 1 when signal < macd; -1 when signal > macd; else carry forward
+    raw_pos = pd.Series(np.sign(diff), index=df.index).replace(0, np.nan)
+    pos = raw_pos.ffill().fillna(0).astype(int)
+
+    # Write columns
+    df[prefix] = round_series(macd, 2)
+    df[f"{prefix}_signal"] = round_series(signal, 2)
+    df[f"{prefix}_cross_up"] = cross_up
+    df[f"{prefix}_cross_down"] = cross_down
+    df[f"{prefix}_pos"] = pos
+
+    return df
+
+
 def calculate_obv(df):
     """
     Calculate the On-Balance Volume (OBV) indicator.
@@ -572,7 +653,7 @@ def calculate_indicators_for_llm_trader(df):
     # df['vol_sma_50'] = calculate_sma(df, period=50, column='V')
     # df['rsi_14'] = calculate_rsi(df, period=14)
     # df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
-    df['macd_12_26'], df['macd_signal_9'] = calculate_macd(df)
+    df = calculate_macd_cross_signal(df)
     df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
         'bollinger_band_lower_20'] = calculate_bollinger_bands(df)
     # df['stochastic_k_14_s3'], df['stochastic_d_14_s3'] = calculate_stochastic_oscillator(df)
@@ -589,6 +670,18 @@ def calculate_indicators_for_llm_entry_validator(df):
     df = calculate_indicators_for_llm_trader(df)
     df = df.drop(['short_exit', 'long_exit'], axis=1)
     return df
+
+
+def heikin_ashi(df, o="O", h="H", l="L", c="C"):
+    ha_close = (df[o] + df[h] + df[l] + df[c]) / 4.0
+    x = ha_close.shift(1).copy()
+    x.iloc[0] = (df[o].iloc[0] + df[c].iloc[0]) / 2.0  # seed HA_Open[0]
+    ha_open = x.ewm(alpha=0.5, adjust=False).mean()
+    ha_high = np.maximum.reduce([df[h].to_numpy(), ha_open.to_numpy(), ha_close.to_numpy()])
+    ha_low = np.minimum.reduce([df[l].to_numpy(), ha_open.to_numpy(), ha_close.to_numpy()])
+    out = df.copy()
+    out["HA_Open"], out["HA_High"], out["HA_Low"], out["HA_Close"] = ha_open, ha_high, ha_low, ha_close
+    return out
 
 
 def calculate_indicators_for_nn_30m(df):
