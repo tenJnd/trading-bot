@@ -119,6 +119,7 @@ LLM_TRADER_LEVERAGE = int(os.environ.get('LLM_TRADER_LEVERAGE', 2))
 LLM_MARGIN = float(os.environ.get('LLM_MARGIN', 0.03))
 LLM_RISK_PER_TRADE = float(os.environ.get('LLM_RISK_PER_TRADE', 0.01))
 LLM_DATA_TAIL = int(os.environ.get('LLM_DATA_TAIL', 20))
+LLM_MODEL = os.environ.get('LLM_MODEL', 'anthropic:claude-sonnet-4-6')  # anthropic:claude-sonnet-4-6
 
 
 class Config:

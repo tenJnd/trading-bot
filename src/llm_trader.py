@@ -2,19 +2,21 @@ import json
 import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Mapping, List, Any, Optional
+from typing import Dict, Literal, Mapping, List, Any, Optional
 
 import pandas as pd
 from database_tools.adapters.postgresql import PostgresqlAdapter
-from llm_adapters import model_config
-from llm_adapters.llm_adapter import LLMClientFactory
+from pydantic import BaseModel
+from pydantic_ai import Agent
+from pydantic_ai.settings import ModelSettings
 from slack_bot.notifications import SlackNotifier
 from sqlalchemy import desc
 
 from exchange_adapter import BaseExchangeAdapter
 from model.turtle_model import StrategySettings
 from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_MIN, \
-    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD, LLM_TRADER_LEVERAGE, LLM_DATA_TAIL, LLM_MARGIN, LLM_RISK_PER_TRADE
+    ACCEPTABLE_ROUNDING_PERCENT_THRESHOLD, LLM_TRADER_LEVERAGE, LLM_DATA_TAIL, LLM_MARGIN, LLM_RISK_PER_TRADE, \
+    LLM_MODEL
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
@@ -152,14 +154,30 @@ class ValidationError(Exception):
     """ Validation error"""
 
 
-class TraderModel(model_config.ModelConfig):
-    MODEL = 'gpt-5-mini'
-    MAX_TOKENS = 8192
-    CONTEXT_WINDOW = 8192
-    TEMPERATURE = 0.2  # Keep outputs deterministic for scoring and ranking
-    RESPONSE_TOKENS = 500  # Ensure response fits within limits
-    FREQUENCY_PENALTY = 0.1  # Avoid repetition in rationale
-    PRESENCE_PENALTY = 0  # Encourage new ideas or highlighting unique patterns
+class TradingAction(BaseModel):
+    action: Literal["long", "short", "close", "cancel", "update_sl", "update_tp", "hold"]
+    order_type: Optional[Literal["limit", "market"]] = None
+    amount: Optional[float] = None
+    entry_price: Optional[float] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    order_id: Optional[str] = None
+    rationale: str
+
+
+class TradingDecision(BaseModel):
+    actions: List[TradingAction]
+
+
+class PyramidDecision(BaseModel):
+    action: Literal["add_position", "hold", "set_stop_loss"]
+    rationale: str
+    stop_loss: Optional[float] = None
+
+
+class EntryDecision(BaseModel):
+    action: Literal["enter_position", "hold"]
+    rationale: str
 
 
 class ConditionVerificationError(Exception):
@@ -230,7 +248,9 @@ class LlmTrader:
     agent_name = 'llm_trader'
     system_prompt = llm_trader_prompt
     agent_action_obj = AgentAction
-    llm_model_config = TraderModel
+    model_name = LLM_MODEL
+    result_type = TradingDecision
+    model_settings = ModelSettings(temperature=0.2, max_tokens=1024)
     df_tail_for_agent = LLM_DATA_TAIL
     leverage = LLM_TRADER_LEVERAGE
     margin = LLM_MARGIN
@@ -561,89 +581,28 @@ class LlmTrader:
 
         return llm_input
 
-    @staticmethod
-    def generate_functions():
-        return [
-            {
-                "name": "trading_decision",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "actions": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "action": {
-                                        "type": "string",
-                                        "enum": ["long", "short", "close", "cancel", "update_sl", "update_tp", "hold"],
-                                        "description": "The trading action to perform."
-                                    },
-                                    "order_type": {
-                                        "type": ["string", "null"],
-                                        "enum": ["limit", "market"],
-                                        "description": "The type of order to place. Required for 'long' or 'short'."
-                                    },
-                                    "amount": {
-                                        "type": ["number", "null"],
-                                        "description": "The amount for the position or order."
-                                    },
-                                    "entry_price": {
-                                        "type": ["number", "null"],
-                                        "description": "The price at which to enter the trade "
-                                                       "(only required if order_type is 'limit')."
-                                    },
-                                    "stop_loss": {
-                                        "type": ["number", "null"],
-                                        "description": "The stop-loss price level or updated stop-loss level for 'update_sl'."
-                                    },
-                                    "take_profit": {
-                                        "type": ["number", "null"],
-                                        "description": "The take-profit price level or updated take-profit level for 'update_tp'."
-                                    },
-                                    "order_id": {
-                                        "type": ["string", "null"],
-                                        "description": "The ID of the order to cancel or update. Required for 'cancel' and 'update_sl', update_tp."
-                                    },
-                                    "rationale": {
-                                        "type": "string",
-                                        "description": "Explanation of the decision based on price action, trend, "
-                                                       "indicators, open interest, funding rate, and exchange settings."
-                                    }
-                                },
-                                "required": ["action", "rationale"],
-                                "description": "Defines a single trading action."
-                            }
-                        }
-                    },
-                    "required": ["actions"],
-                    "description": "Defines a list of trading actions to be performed in sequence."
-                }
-            }
-        ]
-
     def call_agent(self, list_of_actions=False):
-        _logger.info(f"creating agent using llm factory, config: {self.llm_model_config.MODEL}")
-        llm_client = LLMClientFactory.create_llm_client(self.llm_model_config)
-        functions = self.generate_functions()
-        _logger.info(f"Calling the agent...")
-
-        response = llm_client.call_with_functions(
+        _logger.info(f"creating pydantic-ai agent, model: {self.model_name}")
+        agent = Agent(
+            self.model_name,
+            output_type=self.result_type,
             system_prompt=self.system_prompt,
-            user_prompt=str(self.llm_input_data),
-            functions=functions
+            retries=2
         )
-        _logger.info(f'response: {response}')
-        parsed_output = response.choices[0].message.function_call.arguments
-        structured_data = json.loads(parsed_output)
-        _logger.info(f"agent call success")
+        _logger.info("Calling the agent...")
 
-        if list_of_actions:
-            actions = structured_data['actions']
-            actions = [self.agent_action_obj(**data) for data in actions]
-            return actions
+        result = agent.run_sync(
+
+            str(self.llm_input_data),
+            model_settings=self.model_settings,
+        )
+        structured_data = result.output
+        _logger.info(f"agent call success, result: {structured_data}")
+
+        if list_of_actions and hasattr(structured_data, 'actions'):
+            return [self.agent_action_obj(**a.model_dump()) for a in structured_data.actions]
         else:
-            return self.agent_action_obj(**structured_data)
+            return self.agent_action_obj(**structured_data.model_dump())
 
     def call_agent_w_validation(self):
         counter = 1
@@ -923,6 +882,7 @@ class LlmTrader:
 class LlmTurtlePyramidValidator(LlmTrader):
     agent_name = 'lmm_turtle_pyramid_validator'
     system_prompt = turtle_pyramid_validator_prompt
+    result_type = PyramidDecision
     df_tail_for_agent = 10
 
     def __init__(self,
@@ -967,31 +927,11 @@ class LlmTurtlePyramidValidator(LlmTrader):
             self.opened_positions['stopLossPrice'] = last_open_position_stop_loss
         self.llm_input_data = str(self.llm_input_data)
 
-    @staticmethod
-    def generate_functions():
-        return [
-            {
-                "name": "trading_decision",
-                "description": "Provide a trading decision based on market indicators.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["add_position", "hold", "set_stop_loss"]
-                        },
-                        "rationale": {"type": "string"},
-                        "stop_loss": {"type": "number", "nullable": True}
-                    },
-                    "required": ["action", "rationale"]
-                }
-            }
-        ]
-
 
 class LlmTurtleEntryValidator(LlmTurtlePyramidValidator):
     agent_name = 'lmm_turtle_entry_validator'
     system_prompt = turtle_entry_validator_prompt
+    result_type = EntryDecision
     df_tail_for_agent = 10
 
     def __init__(self,
@@ -1011,23 +951,3 @@ class LlmTurtleEntryValidator(LlmTurtlePyramidValidator):
             'symbol': self._exchange.market_futures,
             'price_data': self.price_action_data
         }
-
-    @staticmethod
-    def generate_functions():
-        return [
-            {
-                "name": "trading_decision",
-                "description": "Provide a trading decision based on market indicators.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["enter_position", "hold"]
-                        },
-                        "rationale": {"type": "string"},
-                    },
-                    "required": ["action", "rationale"]
-                }
-            }
-        ]

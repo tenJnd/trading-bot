@@ -649,9 +649,9 @@ def calculate_indicators_for_llm_trader(df):
     df['sma_20'] = calculate_sma(df, period=20)
     df['sma_50'] = calculate_sma(df, period=50)
     df['sma_100'] = calculate_sma(df, period=100)
-    # df['vol_sma_20'] = calculate_sma(df, period=20, column='V')
+    df['vol_sma_20'] = calculate_sma(df, period=20, column='V')
     # df['vol_sma_50'] = calculate_sma(df, period=50, column='V')
-    # df['rsi_14'] = calculate_rsi(df, period=14)
+    df['rsi_14'] = calculate_rsi(df, period=14)
     # df['rsi_sma_14'] = calculate_sma(df, period=14, column='rsi_14')
     df = calculate_macd_cross_signal(df)
     df['bollinger_band_middle_20'], df['bollinger_band_upper_20'], df[
