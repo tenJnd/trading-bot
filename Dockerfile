@@ -25,7 +25,7 @@ RUN #pip install --upgrade git+https://github.com/tenJnd/llm-adapters.git@main
 # app stage
 FROM python:3.10.0
 
-RUN groupadd -g 999 python && useradd -r -u 999 -g python python
+RUN groupadd -g 999 python && useradd -m -u 999 -g python python
 
 RUN mkdir /app && chown python:python /app
 
