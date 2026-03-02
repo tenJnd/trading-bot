@@ -85,6 +85,8 @@ You can generate a **list of actions** when multiple steps are needed to execute
     - The very last agent action including 'hold'
 6. **Previous Error Agent Output (if provided)**:
    - Includes **validation_error** and **required_correction** for refining decisions.
+7. **news list**
+   - Latest news for the ticker. Title and shortened summary (first n words from article)
 
 ---
 

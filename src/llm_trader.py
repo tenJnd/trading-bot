@@ -19,6 +19,7 @@ from src.config import LLM_TRADER_SLACK_URL, VALIDATOR_REPEATED_CALL_TIME_TEST_M
     LLM_MODEL
 from src.model import trader_database
 from src.model.turtle_model import AgentActions
+from src.news_api import get_ticker_news_with_text
 from src.prompts import llm_trader_prompt, turtle_pyramid_validator_prompt, turtle_entry_validator_prompt
 from src.utils.utils import (dynamic_safe_round, calculate_indicators_for_llm_trader,
                              calculate_indicators_for_llm_entry_validator, StrategySettingsModel, get_adjusted_amount,
@@ -275,6 +276,7 @@ class LlmTrader:
             self.last_agent_output = self.get_last_agent_output()
             self.agent_history = self.get_agent_history()
             self.exchange_settings = self.get_exchange_settings()
+            self.news_list = self.get_news()
 
             self.llm_input_data = self.create_llm_input_dict()
 
@@ -285,6 +287,15 @@ class LlmTrader:
                            db: PostgresqlAdapter = None,
                            ):
         return cls(exchange=exchange, strategy_settings=strategy_settings, db=db, load_data=False)
+
+    def get_news(self, n: int = 5):
+        ticker = f"{self.strategy_settings.ticker}-USD"
+        try:
+            news_result = get_ticker_news_with_text(ticker, n)
+            return news_result
+        except Exception as e:
+            _logger.error(f"Failed to fetch news for ticker {ticker}: {e}")
+            return {}
 
     def get_timing_info(self, timeframe, last_candle_timestamp):
         if not timeframe:
@@ -576,7 +587,8 @@ class LlmTrader:
             'opened_positions': self.opened_positions,
             'opened_orders': self.opened_orders,
             'agent_history': self.agent_history,
-            'last_agent_action': self.last_agent_output
+            'last_agent_action': self.last_agent_output,
+            'news_list': self.news_list
         }
 
         return llm_input
