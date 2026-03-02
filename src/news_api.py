@@ -15,11 +15,11 @@ def get_ticker_news_with_text(ticker_symbol, n=3):
         news_list = ticker.news
     except Exception as e:
         logger.error(f"Failed to fetch data from Yahoo Finance: {e}")
-        return
+        return {}
 
     if not news_list:
         logger.warning(f"No news found for ticker: {ticker_symbol}")
-        return
+        return {}
 
     # Limit to n latest news
     top_n_news = news_list[:n]
@@ -45,5 +45,5 @@ def get_ticker_news_with_text(ticker_symbol, n=3):
 
 
 if __name__ == "__main__":
-    # Příklad pro PENDLE-USD
+    # Příklad pro BTC-USD
     get_ticker_news_with_text("BTC-USD", n=5)
