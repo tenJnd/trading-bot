@@ -8,3 +8,4 @@ sqlalchemy==2.0.29
 marshmallow==3.21.1
 sqlalchemy_utc==0.14.0
 pydantic_ai==1.63.0
+yfinance==1.2.0
