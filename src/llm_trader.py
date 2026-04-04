@@ -584,7 +584,7 @@ class LlmTrader:
         llm_input = {
             'symbol': self._exchange.market_futures,
             'price_data': self.price_action_data,
-            'opened_positions': self.opened_positions,
+            'opened_positions': self.opened_positions if self.opened_positions else 'NO OPEN POSITION — you are completely flat with no active trades. Ignore any positions referenced in agent_history; they have been closed.',
             'opened_orders': self.opened_orders,
             'agent_history': self.agent_history,
             'last_agent_action': self.last_agent_output,

@@ -76,11 +76,14 @@ You can generate a **list of actions** when multiple steps are needed to execute
      - **higher timeframe**: Includes:
        - Same data structure as the lower timeframe but used only for broader context (e.g., trend confirmation, key levels).
    - **Current Funding Rate**: The latest funding rate for the asset (`current_funding_rate`).
-2. **Open Positions**: Details of active positions.
+2. **Open Positions**: Details of active positions. **This is the single source of truth about your current position state.**
+   If `opened_positions` is `None` or empty, you have NO open position — regardless of what the agent history shows.
+   Do not assume a position is still open based on past actions in agent_history; positions may have been closed by stop-loss, take-profit, or liquidation between runs.
 3. **Open Orders**: Details of unfilled limit orders.
 4. **Agent history (if provided)**:
    - The last 10 agent actions (excluding 'hold' actions) and actual trade results combined (ordered chronologically).
-   This gives you the info how your decisions resulted. Learn from this info.
+   This is **historical context only** — use it to learn from past decisions and outcomes, NOT to determine current position state.
+   Positions referenced in history may have already been closed by SL/TP or externally.
 5. **The last agent action**
     - The very last agent action including 'hold'
 6. **Previous Error Agent Output (if provided)**:
