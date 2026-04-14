@@ -151,6 +151,114 @@ def merge_natural_order(
     return out
 
 
+def _safe(value):
+    if value is None or pd.isna(value):
+        return None
+    return value
+
+
+def build_regime_summary(history_df: pd.DataFrame, fib_dict: Optional[dict], current_price: float) -> Optional[dict]:
+    """Compact regime snapshot for the LLM to reason over alongside the raw CSV.
+
+    Trend / momentum / vol are read from the last CLOSED bar's indicators.
+    Range position and level distances are computed against the current live price,
+    since that's what the LLM needs to price orders.
+    """
+    if history_df is None or len(history_df) < 5:
+        return None
+
+    last = history_df.iloc[-1]
+
+    sma_10 = _safe(last.get('sma_10'))
+    sma_20 = _safe(last.get('sma_20'))
+    sma_50 = _safe(last.get('sma_50'))
+    sma_100 = _safe(last.get('sma_100'))
+    adx = _safe(last.get('adx_20'))
+
+    up_stack = all(v is not None for v in (sma_10, sma_20, sma_50)) and sma_10 > sma_20 > sma_50 \
+        and (sma_100 is None or sma_50 > sma_100)
+    down_stack = all(v is not None for v in (sma_10, sma_20, sma_50)) and sma_10 < sma_20 < sma_50 \
+        and (sma_100 is None or sma_50 < sma_100)
+
+    if up_stack and adx is not None and adx > 25:
+        trend = 'strong_uptrend'
+    elif up_stack:
+        trend = 'uptrend'
+    elif down_stack and adx is not None and adx > 25:
+        trend = 'strong_downtrend'
+    elif down_stack:
+        trend = 'downtrend'
+    elif adx is not None and adx < 20:
+        trend = 'ranging'
+    else:
+        trend = 'choppy'
+
+    atr_series = history_df['atr_20'].dropna() if 'atr_20' in history_df else pd.Series(dtype=float)
+    vol_ratio = None
+    vol_regime = 'unknown'
+    if len(atr_series) >= 10:
+        recent_atr = float(atr_series.iloc[-1])
+        baseline_atr = float(atr_series.tail(50).median() if len(atr_series) >= 50 else atr_series.median())
+        if baseline_atr > 0:
+            vol_ratio = recent_atr / baseline_atr
+            if vol_ratio > 1.3:
+                vol_regime = 'elevated'
+            elif vol_ratio < 0.7:
+                vol_regime = 'compressed'
+            else:
+                vol_regime = 'normal'
+
+    tail = history_df.tail(20)
+    range_high = float(tail['H'].max())
+    range_low = float(tail['L'].min())
+    range_pos_pct = round((current_price - range_low) / (range_high - range_low) * 100, 1) \
+        if range_high > range_low else None
+
+    rsi = _safe(last.get('rsi_14'))
+    macd_pos = last.get('macd_pos', 0)
+    macd_state = 'bullish' if macd_pos == 1 else 'bearish' if macd_pos == -1 else 'neutral'
+
+    reg_pos_pct = None
+    reg_upper = _safe(last.get('regression_upper_channel'))
+    reg_lower = _safe(last.get('regression_lower_channel'))
+    if reg_upper is not None and reg_lower is not None and reg_upper > reg_lower:
+        reg_pos_pct = round((current_price - reg_lower) / (reg_upper - reg_lower) * 100, 1)
+
+    nearest_above = None
+    nearest_below = None
+    if fib_dict:
+        for name, price in fib_dict.items():
+            if price is None or pd.isna(price):
+                continue
+            if price > current_price and (nearest_above is None or price < nearest_above[1]):
+                nearest_above = (name, float(price))
+            elif price < current_price and (nearest_below is None or price > nearest_below[1]):
+                nearest_below = (name, float(price))
+
+    def _fmt(level):
+        if level is None:
+            return None
+        name, price = level
+        return {
+            'level': name,
+            'price': round(price, 4),
+            'distance_pct': round((price - current_price) / current_price * 100, 2),
+        }
+
+    return {
+        'trend': trend,
+        'adx_20': round(adx, 1) if adx is not None else None,
+        'vol_regime': vol_regime,
+        'atr_vs_baseline': round(vol_ratio, 2) if vol_ratio is not None else None,
+        'range_position_20_pct': range_pos_pct,
+        'regression_channel_position_pct': reg_pos_pct,
+        'rsi_14': round(rsi, 1) if rsi is not None else None,
+        'macd_state': macd_state,
+        'nearest_resistance': _fmt(nearest_above),
+        'nearest_support': _fmt(nearest_below),
+    }
+
+
 class ValidationError(Exception):
     """ Validation error"""
 
@@ -362,6 +470,7 @@ class LlmTrader:
 
             d = {}
             d.update(payload)  # merge agent_output fields first
+            d.pop('rationale', None)  # strip self-anchoring narrative; comment this line to restore
             d['datetime'] = row.timestamp_created
             d['candle_timestamp'] = row.candle_timestamp
             d['entry_type'] = 'agent_action'
@@ -546,10 +655,13 @@ class LlmTrader:
         df_tail = history_df.tail(self.df_tail_for_agent)
         price_data_csv = df_tail.to_csv()
 
+        regime_summary = build_regime_summary(history_df, fib_dict, self.last_close_price)
+
         timing_data = self.get_timing_info(timeframe, last_candle_timestamp)
 
         return {
             'timing_info': timing_data,
+            'regime_summary': regime_summary,
             'price_and_indicators_history': price_data_csv,
             "live_snapshot": live_row,
             'fib_levels': fib_dict,
@@ -691,7 +803,7 @@ class LlmTrader:
         # Initialize error messages list
         error_messages = []
 
-        min_rr_ratio = 1
+        min_rr_ratio = 1.5
         rr_ratio = agent_action.rr_ratio(c_price)
         if rr_ratio < min_rr_ratio:
             error_messages.append(
