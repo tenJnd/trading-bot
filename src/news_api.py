@@ -5,6 +5,7 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
+yf.set_tz_cache_location("./yfinance_cache")
 
 def get_ticker_news_with_text(ticker_symbol, n=3):
     logger.info(f"Fetching news for ticker: {ticker_symbol}")
